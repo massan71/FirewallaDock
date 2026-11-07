@@ -110,7 +110,7 @@ struct Device: Decodable, Identifiable, Hashable {
     var totalUpload: Double
 
     var networkName: String { network?.name ?? "" }
-    var lastSeenSort: Double { lastSeen ?? 0 }
+    var lastSeenSort: Double { online ? .greatestFiniteMagnitude : (lastSeen ?? 0) }
     var onlineSort: Int { online ? 1 : 0 }
 
     init(from decoder: Decoder) throws {
@@ -258,6 +258,7 @@ struct TrendPoint: Decodable, Identifiable, Hashable {
 }
 
 struct Page<T: Decodable>: Decodable {
+    /// Number of items in this page (not the total), as observed on the real API.
     var count: Int
     var results: [T]
     var nextCursor: String?

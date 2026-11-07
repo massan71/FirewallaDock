@@ -178,8 +178,10 @@ struct TrendChart: View {
     var body: some View {
         VStack(alignment: .leading) {
             Text(title).font(.headline)
-            if points.isEmpty {
-                Text("No data").foregroundStyle(.secondary).frame(height: 160)
+            if points.isEmpty || points.allSatisfy({ $0.value == 0 }) {
+                Text(points.isEmpty ? "No data" : "None in the last \(points.count) days")
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 160)
             } else {
                 Chart(points) {
                     BarMark(x: .value("Day", $0.date, unit: .day), y: .value("Value", $0.value))
@@ -313,7 +315,11 @@ struct DevicesView: View {
             TableColumn("↑ Upload", value: \.totalUpload) { d in Text(Fmt.bytes(d.totalUpload)).monospacedDigit() }
                 .width(min: 80, ideal: 90)
             TableColumn("Last Seen", value: \.lastSeenSort) { d in
-                Text(d.lastSeen.map { Fmt.relative($0.asDate) } ?? "—")
+                if d.online {
+                    Text("Online now").foregroundStyle(.green)
+                } else {
+                    Text(d.lastSeen.map { Fmt.relative($0.asDate) } ?? "—")
+                }
             }.width(min: 70, ideal: 90)
         }
         .searchable(text: $search, prompt: "Name, IP, MAC, vendor")
@@ -374,6 +380,17 @@ struct FlowsView: View {
                 TableColumn("Traffic", value: \.total) { f in
                     Text(f.block ? "\(f.count ?? 1)×" : Fmt.bytes(f.total)).monospacedDigit()
                 }.width(min: 70, ideal: 80)
+            }
+            .overlay {
+                if store.flows.isEmpty && !store.isLoadingFlows && store.flowsError == nil {
+                    ContentUnavailableView {
+                        Label("No flows", systemImage: "arrow.left.arrow.right")
+                    } description: {
+                        Text(customQuery.isEmpty && mode == 0
+                             ? "The MSP API returned no flows for the last 24 hours. Flow data is a paid feature: it is only available on some Firewalla MSP plans and must be enabled there."
+                             : "No flows match this filter in the last 24 hours.")
+                    }
+                }
             }
         }
         .onAppear { if store.flows.isEmpty { reload() } }

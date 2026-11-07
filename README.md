@@ -11,7 +11,7 @@ A macOS Dock app that shows the status of your Firewalla network, reading data t
 - **Overview**: stats, box list, daily charts of alarms and blocked flows, alarms by type
 - **Alarms**: search, filter by type, archive (requires a *Full Access* token)
 - **Devices**: sortable table with IP, MAC, vendor, network, traffic
-- **Flows**: all or blocked only, with advanced [search queries](https://docs.firewalla.net/api-reference/search/)
+- **Flows**: all or blocked only, with advanced [search queries](https://docs.firewalla.net/api-reference/search/) (requires a paid MSP plan, see below)
 - Automatic refresh (1–60 min) and notifications for new alarms
 - API token stored in the Keychain; sandboxed app with outgoing network access only
 
@@ -20,6 +20,8 @@ A macOS Dock app that shows the status of your Firewalla network, reading data t
 - macOS 14 or later
 - Xcode 16 or later
 - A [Firewalla MSP](https://firewalla.net) account with an API token
+
+> **Note:** flow data (the Flows section and the "Blocked flows per day" chart) is a paid feature. It is only available on some Firewalla MSP plans and must be enabled there; otherwise the API returns no flows.
 
 ## Building
 
@@ -43,6 +45,17 @@ The app is ad-hoc signed ("Sign to Run Locally"); to distribute it, set your dev
 1. In Firewalla MSP: **Settings → MSP API → Create New Token** (*Read Only* is enough for viewing).
 2. Open the app → **Settings** (⌘,).
 3. Enter the base URL (`https://<yourdomain>.firewalla.net` or `https://firewalla.net/api`) and the token, then click **Save and Test**.
+
+## Troubleshooting
+
+`scripts/probe.py` checks what the MSP API actually returns for your account. It asks for the base URL and token (the token is hidden and never stored) and saves the responses to `build/probe/`, which is ignored by git:
+
+```bash
+python3 scripts/probe.py                  # one request per endpoint, with the response structure
+python3 scripts/probe.py --count-alarms   # count all active alarms by type, to compare with the Dock badge
+```
+
+The saved responses contain your device names and MAC addresses, so do not share them.
 
 ## Project structure
 
