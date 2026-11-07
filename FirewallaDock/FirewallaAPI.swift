@@ -8,18 +8,18 @@ enum APIError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .notConfigured: return "Configura URL e token nelle Impostazioni (⌘,)."
-        case .invalidURL: return "URL dell'API non valido."
-        case .http(401, _): return "Token non valido o permessi insufficienti (HTTP 401)."
-        case .http(404, _): return "Endpoint non trovato (HTTP 404). Controlla l'URL base."
-        case .http(let code, let body): return "Errore HTTP \(code): \(body.prefix(200))"
-        case .decoding(let msg): return "Risposta inattesa dall'API: \(msg)"
+        case .notConfigured: return "Set the URL and token in Settings (⌘,)."
+        case .invalidURL: return "Invalid API URL."
+        case .http(401, _): return "Invalid token or insufficient permissions (HTTP 401)."
+        case .http(404, _): return "Endpoint not found (HTTP 404). Check the base URL."
+        case .http(let code, let body): return "HTTP error \(code): \(body.prefix(200))"
+        case .decoding(let msg): return "Unexpected API response: \(msg)"
         }
     }
 }
 
-/// Client per Firewalla MSP API v2 (https://docs.firewalla.net).
-/// Base URL: `https://<tuodominio>.firewalla.net` oppure `https://firewalla.net/api`.
+/// Client for the Firewalla MSP API v2 (https://docs.firewalla.net).
+/// Base URL: `https://<yourdomain>.firewalla.net` or `https://firewalla.net/api`.
 struct FirewallaAPI {
     let baseURL: String
     let token: String
@@ -78,7 +78,7 @@ struct FirewallaAPI {
         try await get("/v2/devices", query: box.map { [URLQueryItem(name: "box", value: $0)] } ?? [])
     }
 
-    /// Scarica gli allarmi seguendo la paginazione fino a `max` elementi.
+    /// Fetches alarms, following pagination up to `max` items.
     func alarms(query: String? = "status:active", max: Int = 500) async throws -> [Alarm] {
         try await paged("/v2/alarms", query: query, max: max)
     }
@@ -90,7 +90,7 @@ struct FirewallaAPI {
     func alarmTrend() async throws -> [TrendPoint] { try await get("/v2/trends/alarms") }
     func blockedFlowTrend() async throws -> [TrendPoint] { try await get("/v2/trends/flows") }
 
-    /// Richiede un token "Full Access".
+    /// Requires a "Full Access" token.
     func archive(_ alarm: Alarm) async throws {
         _ = try await send(try request("/v2/alarms/\(alarm.gid)/\(alarm.aid)/archive", method: "POST", body: Data("{}".utf8)))
     }

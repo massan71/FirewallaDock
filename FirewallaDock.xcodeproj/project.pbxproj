@@ -82,10 +82,10 @@
 				};
 			};
 			buildConfigurationList = F1A00000000000000000000A /* Build configuration list for PBXProject "FirewallaDock" */;
-			developmentRegion = it;
+			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
-				it,
+				en,
 				Base,
 			);
 			mainGroup = F1A000000000000000000004;

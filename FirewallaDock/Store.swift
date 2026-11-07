@@ -6,14 +6,14 @@ import UserNotifications
 final class Store: ObservableObject {
     static let shared = Store()
 
-    // Impostazioni
+    // Settings
     @Published var baseURL: String { didSet { UserDefaults.standard.set(baseURL, forKey: "baseURL") } }
     @Published var token: String { didSet { Keychain.save(token) } }
     @Published var refreshMinutes: Int { didSet { UserDefaults.standard.set(refreshMinutes, forKey: "refreshMinutes"); restartTimer() } }
     @Published var notifyNewAlarms: Bool { didSet { UserDefaults.standard.set(notifyNewAlarms, forKey: "notifyNewAlarms"); if notifyNewAlarms { requestNotificationPermission() } } }
     @Published var badgeSecurityOnly: Bool { didSet { UserDefaults.standard.set(badgeSecurityOnly, forKey: "badgeSecurityOnly"); updateDock() } }
 
-    // Dati
+    // Data
     @Published var boxes: [Box] = []
     @Published var devices: [Device] = []
     @Published var alarms: [Alarm] = []
@@ -21,7 +21,7 @@ final class Store: ObservableObject {
     @Published var flowTrend: [TrendPoint] = []
     @Published var flows: [Flow] = []
 
-    // Stato
+    // State
     @Published var isLoading = false
     @Published var isLoadingFlows = false
     @Published var lastUpdated: Date?
@@ -50,7 +50,7 @@ final class Store: ObservableObject {
         badgeSecurityOnly = d.bool(forKey: "badgeSecurityOnly")
     }
 
-    // MARK: Ciclo di aggiornamento
+    // MARK: Refresh loop
 
     func start() {
         if notifyNewAlarms { requestNotificationPermission() }
@@ -86,14 +86,14 @@ final class Store: ObservableObject {
         async let ft = api.blockedFlowTrend()
 
         var errors: [String] = []
-        do { boxes = try await b.sorted { $0.name < $1.name } } catch { errors.append("Box: \(error.localizedDescription)") }
-        do { devices = try await d } catch { errors.append("Dispositivi: \(error.localizedDescription)") }
+        do { boxes = try await b.sorted { $0.name < $1.name } } catch { errors.append("Boxes: \(error.localizedDescription)") }
+        do { devices = try await d } catch { errors.append("Devices: \(error.localizedDescription)") }
         do {
             let fetched = try await a
             notifyNew(fetched)
             alarms = fetched.sorted { $0.ts > $1.ts }
-        } catch { errors.append("Allarmi: \(error.localizedDescription)") }
-        // I trend sono opzionali: se non disponibili non segnaliamo errore
+        } catch { errors.append("Alarms: \(error.localizedDescription)") }
+        // Trends are optional: no error if unavailable
         alarmTrend = (try? await at) ?? []
         flowTrend = (try? await ft) ?? []
 
@@ -120,14 +120,14 @@ final class Store: ObservableObject {
             alarms.removeAll { $0.id == alarm.id }
             updateDock()
         } catch {
-            errorMessage = "Archiviazione non riuscita: \(error.localizedDescription) (serve un token Full Access)"
+            errorMessage = "Archiving failed: \(error.localizedDescription) (requires a Full Access token)"
         }
     }
 
     func testConnection() async -> String {
         do {
             let b = try await api.boxes()
-            return "✅ Connesso: \(b.count) box trovati (\(b.map(\.name).joined(separator: ", ")))"
+            return "✅ Connected: \(b.count) box(es) found (\(b.map(\.name).joined(separator: ", ")))"
         } catch {
             return "❌ \(error.localizedDescription)"
         }
@@ -140,7 +140,7 @@ final class Store: ObservableObject {
         NSApp?.dockTile.badgeLabel = count > 0 ? "\(count)" : (errorMessage != nil && isConfigured ? "!" : nil)
     }
 
-    // MARK: Notifiche
+    // MARK: Notifications
 
     private var canNotify: Bool { Bundle.main.bundleIdentifier != nil }
 
@@ -152,7 +152,7 @@ final class Store: ObservableObject {
     private func notifyNew(_ fetched: [Alarm]) {
         let ids = Set(fetched.map(\.id))
         defer { seenAlarmIDs = (seenAlarmIDs ?? []).union(ids) }
-        // Al primo caricamento non notifichiamo lo storico
+        // Do not notify existing alarms on first load
         guard let seen = seenAlarmIDs, notifyNewAlarms, canNotify else { return }
         let new = fetched.filter { !seen.contains($0.id) }.prefix(5)
         for alarm in new {

@@ -2,10 +2,10 @@ import Charts
 import SwiftUI
 
 enum SidebarItem: String, CaseIterable, Identifiable {
-    case overview = "Panoramica"
-    case alarms = "Allarmi"
-    case devices = "Dispositivi"
-    case flows = "Flussi"
+    case overview = "Overview"
+    case alarms = "Alarms"
+    case devices = "Devices"
+    case flows = "Flows"
     var id: String { rawValue }
     var icon: String {
         switch self {
@@ -49,7 +49,7 @@ struct ContentView: View {
             .toolbar {
                 ToolbarItemGroup {
                     if let last = store.lastUpdated {
-                        Text("Aggiornato \(last.formatted(date: .omitted, time: .shortened))")
+                        Text("Updated \(last.formatted(date: .omitted, time: .shortened))")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     if store.isLoading {
@@ -57,9 +57,9 @@ struct ContentView: View {
                     }
                     Button {
                         Task { await store.refresh() }
-                    } label: { Label("Aggiorna", systemImage: "arrow.clockwise") }
+                    } label: { Label("Refresh", systemImage: "arrow.clockwise") }
                     .disabled(store.isLoading)
-                    SettingsLink { Label("Impostazioni", systemImage: "gearshape") }
+                    SettingsLink { Label("Settings", systemImage: "gearshape") }
                 }
             }
         }
@@ -82,17 +82,17 @@ struct ErrorBanner: View {
 struct OnboardingView: View {
     var body: some View {
         ContentUnavailableView {
-            Label("Collega il tuo Firewalla", systemImage: "network.badge.shield.half.filled")
+            Label("Connect your Firewalla", systemImage: "network.badge.shield.half.filled")
         } description: {
-            Text("Crea un token in Firewalla MSP → Settings → MSP API → Create New Token, poi inseriscilo nelle Impostazioni insieme all'URL del tuo dominio MSP.")
+            Text("Create a token in Firewalla MSP → Settings → MSP API → Create New Token, then enter it in Settings together with your MSP domain URL.")
         } actions: {
-            SettingsLink { Text("Apri Impostazioni") }
+            SettingsLink { Text("Open Settings") }
                 .buttonStyle(.borderedProminent)
         }
     }
 }
 
-// MARK: - Panoramica
+// MARK: - Overview
 
 struct StatCard: View {
     let title: String
@@ -118,28 +118,28 @@ struct OverviewView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: 12)], spacing: 12) {
-                    StatCard(title: "Box online", value: "\(store.onlineBoxes)/\(store.boxes.count)",
+                    StatCard(title: "Boxes online", value: "\(store.onlineBoxes)/\(store.boxes.count)",
                              icon: "shield.lefthalf.filled",
                              tint: store.onlineBoxes == store.boxes.count ? .green : .red)
-                    StatCard(title: "Dispositivi online", value: "\(store.onlineDevices)/\(store.devices.count)",
+                    StatCard(title: "Devices online", value: "\(store.onlineDevices)/\(store.devices.count)",
                              icon: "laptopcomputer.and.iphone")
-                    StatCard(title: "Allarmi attivi", value: "\(store.activeAlarms.count)",
+                    StatCard(title: "Active alarms", value: "\(store.activeAlarms.count)",
                              icon: "bell.fill", tint: store.activeAlarms.isEmpty ? .green : .orange)
-                    StatCard(title: "Allarmi di sicurezza",
+                    StatCard(title: "Security alarms",
                              value: "\(store.activeAlarms.filter { AlarmType.isSecurity($0.type) }.count)",
                              icon: "exclamationmark.shield.fill", tint: .red)
                 }
 
-                Text("Box").font(.title3.bold())
+                Text("Boxes").font(.title3.bold())
                 ForEach(store.boxes) { box in BoxRow(box: box) }
 
                 HStack(alignment: .top, spacing: 16) {
-                    TrendChart(title: "Allarmi al giorno", points: store.alarmTrend, color: .orange)
-                    TrendChart(title: "Flussi bloccati al giorno", points: store.flowTrend, color: .red)
+                    TrendChart(title: "Alarms per day", points: store.alarmTrend, color: .orange)
+                    TrendChart(title: "Blocked flows per day", points: store.flowTrend, color: .red)
                 }
 
                 if !store.activeAlarms.isEmpty {
-                    Text("Allarmi per tipo").font(.title3.bold())
+                    Text("Alarms by type").font(.title3.bold())
                     AlarmTypeChart(alarms: store.activeAlarms)
                 }
             }
@@ -179,10 +179,10 @@ struct TrendChart: View {
         VStack(alignment: .leading) {
             Text(title).font(.headline)
             if points.isEmpty {
-                Text("Nessun dato").foregroundStyle(.secondary).frame(height: 160)
+                Text("No data").foregroundStyle(.secondary).frame(height: 160)
             } else {
                 Chart(points) {
-                    BarMark(x: .value("Giorno", $0.date, unit: .day), y: .value("Valore", $0.value))
+                    BarMark(x: .value("Day", $0.date, unit: .day), y: .value("Value", $0.value))
                         .foregroundStyle(color.gradient)
                 }
                 .frame(height: 160)
@@ -201,7 +201,7 @@ struct AlarmTypeChart: View {
             .map { (name: AlarmType.name($0.key), count: $0.value.count) }
             .sorted { $0.count > $1.count }
         Chart(grouped, id: \.name) { item in
-            BarMark(x: .value("Numero", item.count), y: .value("Tipo", item.name))
+            BarMark(x: .value("Count", item.count), y: .value("Type", item.name))
                 .foregroundStyle(Color.orange.gradient)
                 .annotation(position: .trailing) { Text("\(item.count)").font(.caption) }
         }
@@ -211,7 +211,7 @@ struct AlarmTypeChart: View {
     }
 }
 
-// MARK: - Allarmi
+// MARK: - Alarms
 
 struct AlarmsView: View {
     @EnvironmentObject var store: Store
@@ -234,30 +234,30 @@ struct AlarmsView: View {
                 Image(systemName: AlarmType.icon(a.type))
                     .foregroundStyle(AlarmType.isSecurity(a.type) ? .red : .orange)
             }.width(22)
-            TableColumn("Quando") { a in
+            TableColumn("When") { a in
                 Text(Fmt.relative(a.date)).help(Fmt.dateTime(a.date))
             }.width(min: 80, ideal: 100)
-            TableColumn("Tipo") { a in Text(a.typeName) }.width(min: 110, ideal: 150)
-            TableColumn("Messaggio") { a in Text(a.message).help(a.message) }
-            TableColumn("Dispositivo") { a in Text(a.deviceName) }.width(min: 90, ideal: 140)
-            TableColumn("Remoto") { a in
+            TableColumn("Type") { a in Text(a.typeName) }.width(min: 110, ideal: 150)
+            TableColumn("Message") { a in Text(a.message).help(a.message) }
+            TableColumn("Device") { a in Text(a.deviceName) }.width(min: 90, ideal: 140)
+            TableColumn("Remote") { a in
                 Text([a.remote?.domain ?? a.remote?.ip, a.remote?.region].compactMap { $0 }.joined(separator: " · "))
             }.width(min: 90, ideal: 160)
         }
         .contextMenu(forSelectionType: Alarm.ID.self) { ids in
             if let id = ids.first, let alarm = store.alarms.first(where: { $0.id == id }) {
-                Button("Copia messaggio") {
+                Button("Copy Message") {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(alarm.message, forType: .string)
                 }
-                Button("Archivia allarme") { Task { await store.archive(alarm) } }
+                Button("Archive Alarm") { Task { await store.archive(alarm) } }
             }
         }
-        .searchable(text: $search, prompt: "Cerca negli allarmi")
+        .searchable(text: $search, prompt: "Search alarms")
         .toolbar {
             ToolbarItem(placement: .navigation) {
-                Picker("Tipo", selection: $typeFilter) {
-                    Text("Tutti i tipi").tag(0)
+                Picker("Type", selection: $typeFilter) {
+                    Text("All types").tag(0)
                     ForEach(AlarmType.all.filter { presentTypes.contains($0.0) }, id: \.0) { t in
                         Text(t.1).tag(t.0)
                     }
@@ -267,13 +267,13 @@ struct AlarmsView: View {
         }
         .overlay {
             if store.activeAlarms.isEmpty && !store.isLoading {
-                ContentUnavailableView("Nessun allarme attivo", systemImage: "checkmark.shield")
+                ContentUnavailableView("No active alarms", systemImage: "checkmark.shield")
             }
         }
     }
 }
 
-// MARK: - Dispositivi
+// MARK: - Devices
 
 struct DevicesView: View {
     @EnvironmentObject var store: Store
@@ -297,7 +297,7 @@ struct DevicesView: View {
             TableColumn("", value: \.onlineSort) { d in
                 Circle().fill(d.online ? .green : .gray.opacity(0.5)).frame(width: 8, height: 8)
             }.width(16)
-            TableColumn("Nome", value: \.name)
+            TableColumn("Name", value: \.name)
             TableColumn("IP", value: \.ip) { d in
                 HStack(spacing: 4) {
                     Text(d.ip).monospacedDigit()
@@ -306,30 +306,30 @@ struct DevicesView: View {
             }.width(min: 100, ideal: 120)
             TableColumn("MAC", value: \.id) { d in Text(d.id).font(.system(.body, design: .monospaced)) }
                 .width(min: 130, ideal: 150)
-            TableColumn("Produttore", value: \.macVendor)
-            TableColumn("Rete", value: \.networkName).width(min: 70, ideal: 100)
+            TableColumn("Vendor", value: \.macVendor)
+            TableColumn("Network", value: \.networkName).width(min: 70, ideal: 100)
             TableColumn("↓ Download", value: \.totalDownload) { d in Text(Fmt.bytes(d.totalDownload)).monospacedDigit() }
                 .width(min: 80, ideal: 90)
             TableColumn("↑ Upload", value: \.totalUpload) { d in Text(Fmt.bytes(d.totalUpload)).monospacedDigit() }
                 .width(min: 80, ideal: 90)
-            TableColumn("Visto", value: \.lastSeenSort) { d in
+            TableColumn("Last Seen", value: \.lastSeenSort) { d in
                 Text(d.lastSeen.map { Fmt.relative($0.asDate) } ?? "—")
             }.width(min: 70, ideal: 90)
         }
-        .searchable(text: $search, prompt: "Nome, IP, MAC, produttore")
+        .searchable(text: $search, prompt: "Name, IP, MAC, vendor")
         .toolbar {
             ToolbarItem(placement: .navigation) {
-                Toggle("Solo online", isOn: $onlineOnly).toggleStyle(.checkbox)
+                Toggle("Online only", isOn: $onlineOnly).toggleStyle(.checkbox)
             }
         }
     }
 }
 
-// MARK: - Flussi
+// MARK: - Flows
 
 struct FlowsView: View {
     @EnvironmentObject var store: Store
-    @State private var mode = 0 // 0 tutti, 1 bloccati
+    @State private var mode = 0 // 0 all, 1 blocked
     @State private var customQuery = ""
     @State private var sortOrder = [KeyPathComparator(\Flow.tsSort, order: .reverse)]
 
@@ -345,15 +345,15 @@ struct FlowsView: View {
         VStack(spacing: 0) {
             HStack {
                 Picker("", selection: $mode) {
-                    Text("Tutti").tag(0)
-                    Text("Bloccati").tag(1)
+                    Text("All").tag(0)
+                    Text("Blocked").tag(1)
                 }
                 .pickerStyle(.segmented)
                 .frame(width: 180)
-                TextField("Query avanzata (es. device.name:*iphone* category:video)", text: $customQuery)
+                TextField("Advanced query (e.g. device.name:*iphone* category:video)", text: $customQuery)
                     .textFieldStyle(.roundedBorder)
                     .onSubmit { reload() }
-                Button("Cerca") { reload() }
+                Button("Search") { reload() }
                 if store.isLoadingFlows { ProgressView().controlSize(.small) }
             }
             .padding(10)
@@ -365,13 +365,13 @@ struct FlowsView: View {
                     Image(systemName: f.block ? "hand.raised.fill" : "checkmark.circle")
                         .foregroundStyle(f.block ? .red : .green)
                 }.width(20)
-                TableColumn("Quando", value: \.tsSort) { f in Text(Fmt.relative(f.date)).help(Fmt.dateTime(f.date)) }
+                TableColumn("When", value: \.tsSort) { f in Text(Fmt.relative(f.date)).help(Fmt.dateTime(f.date)) }
                     .width(min: 80, ideal: 90)
-                TableColumn("Dispositivo", value: \.deviceName)
-                TableColumn("Destinazione", value: \.destinationName)
-                TableColumn("Categoria", value: \.categoryName).width(min: 70, ideal: 90)
-                TableColumn("Paese", value: \.regionName).width(50)
-                TableColumn("Traffico", value: \.total) { f in
+                TableColumn("Device", value: \.deviceName)
+                TableColumn("Destination", value: \.destinationName)
+                TableColumn("Category", value: \.categoryName).width(min: 70, ideal: 90)
+                TableColumn("Country", value: \.regionName).width(50)
+                TableColumn("Traffic", value: \.total) { f in
                     Text(f.block ? "\(f.count ?? 1)×" : Fmt.bytes(f.total)).monospacedDigit()
                 }.width(min: 70, ideal: 80)
             }
@@ -386,7 +386,7 @@ struct FlowsView: View {
     }
 }
 
-// MARK: - Impostazioni
+// MARK: - Settings
 
 struct SettingsView: View {
     @EnvironmentObject var store: Store
@@ -397,15 +397,15 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Section("Connessione Firewalla MSP") {
-                TextField("URL base API", text: $urlDraft, prompt: Text("https://tuodominio.firewalla.net"))
-                Text("Usa https://<tuodominio>.firewalla.net oppure https://firewalla.net/api")
+            Section("Firewalla MSP Connection") {
+                TextField("API base URL", text: $urlDraft, prompt: Text("https://yourdomain.firewalla.net"))
+                Text("Use https://<yourdomain>.firewalla.net or https://firewalla.net/api")
                     .font(.caption).foregroundStyle(.secondary)
-                SecureField("Token API", text: $tokenDraft)
-                Text("MSP → Settings → MSP API → Create New Token. \"Read Only\" basta per la lettura; \"Full Access\" serve per archiviare gli allarmi. Il token è salvato nel Portachiavi.")
+                SecureField("API token", text: $tokenDraft)
+                Text("MSP → Settings → MSP API → Create New Token. \"Read Only\" is enough for viewing; \"Full Access\" is required to archive alarms. The token is stored in the Keychain.")
                     .font(.caption).foregroundStyle(.secondary)
                 HStack {
-                    Button("Salva e verifica") {
+                    Button("Save and Test") {
                         store.baseURL = urlDraft
                         store.token = tokenDraft
                         testing = true
@@ -421,12 +421,12 @@ struct SettingsView: View {
                 if let result = testResult { Text(result).font(.callout).textSelection(.enabled) }
             }
 
-            Section("Comportamento") {
-                Picker("Aggiorna ogni", selection: $store.refreshMinutes) {
+            Section("Behavior") {
+                Picker("Refresh every", selection: $store.refreshMinutes) {
                     ForEach([1, 2, 5, 10, 15, 30, 60], id: \.self) { Text("\($0) min").tag($0) }
                 }
-                Toggle("Notifica i nuovi allarmi", isOn: $store.notifyNewAlarms)
-                Toggle("Badge nel Dock solo per allarmi di sicurezza", isOn: $store.badgeSecurityOnly)
+                Toggle("Notify about new alarms", isOn: $store.notifyNewAlarms)
+                Toggle("Dock badge for security alarms only", isOn: $store.badgeSecurityOnly)
             }
         }
         .formStyle(.grouped)

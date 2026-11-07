@@ -1,7 +1,7 @@
 import Foundation
 
-// MARK: - Helpers per decodifica tollerante
-// L'API Firewalla a volte restituisce numeri come stringhe (es. lastSeen) e id come numeri o stringhe.
+// MARK: - Lenient decoding helpers
+// The Firewalla API sometimes returns numbers as strings (e.g. lastSeen) and ids as numbers or strings.
 
 struct AnyCodingKey: CodingKey {
     var stringValue: String
@@ -47,7 +47,7 @@ extension Double {
     var asDate: Date { Date(timeIntervalSince1970: self) }
 }
 
-// MARK: - Modelli
+// MARK: - Models
 
 struct NamedRef: Decodable, Hashable {
     var id: String?
@@ -117,7 +117,7 @@ struct Device: Decodable, Identifiable, Hashable {
         let c = try decoder.container(keyedBy: AnyCodingKey.self)
         id = c.string("id") ?? UUID().uuidString
         gid = c.string("gid")
-        name = c.string("name") ?? (c.string("id") ?? "Sconosciuto")
+        name = c.string("name") ?? (c.string("id") ?? "Unknown")
         ip = c.string("ip") ?? ""
         macVendor = c.string("macVendor") ?? ""
         online = c.bool("online") ?? false
@@ -178,24 +178,24 @@ struct Alarm: Decodable, Identifiable, Hashable {
 
 enum AlarmType {
     static let all: [(Int, String, String)] = [
-        (1, "Attività sospetta", "exclamationmark.shield.fill"),
-        (2, "Upload anomalo", "arrow.up.circle.fill"),
-        (3, "Uso banda elevato", "speedometer"),
-        (4, "Piano dati mensile", "chart.pie.fill"),
-        (5, "Nuovo dispositivo", "plus.circle.fill"),
-        (6, "Dispositivo di nuovo online", "wifi"),
-        (7, "Dispositivo offline", "wifi.slash"),
-        (8, "Attività video", "play.rectangle.fill"),
-        (9, "Attività gaming", "gamecontroller.fill"),
-        (10, "Attività per adulti", "eye.slash.fill"),
-        (11, "Attività VPN", "lock.shield.fill"),
-        (12, "Connessione VPN ripristinata", "checkmark.shield.fill"),
-        (13, "Errore connessione VPN", "xmark.shield.fill"),
-        (14, "Porta aperta", "door.left.hand.open"),
-        (15, "Connettività Internet", "globe"),
-        (16, "Upload elevato", "arrow.up.to.line"),
+        (1, "Security Activity", "exclamationmark.shield.fill"),
+        (2, "Abnormal Upload", "arrow.up.circle.fill"),
+        (3, "Large Bandwidth Usage", "speedometer"),
+        (4, "Monthly Data Plan", "chart.pie.fill"),
+        (5, "New Device", "plus.circle.fill"),
+        (6, "Device Back Online", "wifi"),
+        (7, "Device Offline", "wifi.slash"),
+        (8, "Video Activity", "play.rectangle.fill"),
+        (9, "Gaming Activity", "gamecontroller.fill"),
+        (10, "Porn Activity", "eye.slash.fill"),
+        (11, "VPN Activity", "lock.shield.fill"),
+        (12, "VPN Connection Restored", "checkmark.shield.fill"),
+        (13, "VPN Connection Error", "xmark.shield.fill"),
+        (14, "Open Port", "door.left.hand.open"),
+        (15, "Internet Connectivity Update", "globe"),
+        (16, "Large Upload", "arrow.up.to.line"),
     ]
-    static func name(_ t: Int) -> String { all.first { $0.0 == t }?.1 ?? "Tipo \(t)" }
+    static func name(_ t: Int) -> String { all.first { $0.0 == t }?.1 ?? "Type \(t)" }
     static func icon(_ t: Int) -> String { all.first { $0.0 == t }?.2 ?? "bell.fill" }
     static func isSecurity(_ t: Int) -> Bool { [1, 2, 10, 13, 14, 16].contains(t) }
 }
@@ -270,18 +270,26 @@ struct Page<T: Decodable>: Decodable {
     }
 }
 
-// MARK: - Formattazione
+// MARK: - Formatting
 
 enum Fmt {
+    /// Format text in the app's UI language (English), keeping the user's region settings.
+    static let locale: Locale = {
+        var comps = Locale.Components(locale: .current)
+        comps.languageComponents = Locale.Language.Components(identifier: Bundle.main.preferredLocalizations.first ?? "en")
+        return Locale(components: comps)
+    }()
+
     static func bytes(_ v: Double) -> String {
         ByteCountFormatter.string(fromByteCount: Int64(v), countStyle: .decimal)
     }
     static func relative(_ d: Date) -> String {
         let f = RelativeDateTimeFormatter()
         f.unitsStyle = .short
+        f.locale = locale
         return f.localizedString(for: d, relativeTo: Date())
     }
     static func dateTime(_ d: Date) -> String {
-        d.formatted(date: .abbreviated, time: .shortened)
+        d.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(locale))
     }
 }

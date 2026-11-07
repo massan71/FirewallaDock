@@ -14,7 +14,7 @@ struct FirewallaDockApp: App {
         }
         .commands {
             CommandGroup(after: .toolbar) {
-                Button("Aggiorna") { Task { await store.refresh() } }
+                Button("Refresh") { Task { await store.refresh() } }
                     .keyboardShortcut("r")
             }
         }
@@ -32,10 +32,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        false // resta nel Dock e continua ad aggiornare il badge
+        false // stay in the Dock and keep updating the badge
     }
 
-    /// Menu che compare con clic destro sull'icona nel Dock.
+    /// Menu shown when right-clicking the Dock icon.
     @MainActor
     func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
         let store = Store.shared
@@ -49,7 +49,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         if !store.isConfigured {
-            info("Non configurato: apri Impostazioni")
+            info("Not configured: open Settings")
             return menu
         }
 
@@ -58,13 +58,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if !store.boxes.isEmpty { menu.addItem(.separator()) }
 
-        info("Allarmi attivi: \(store.activeAlarms.count)", "bell")
-        info("Dispositivi online: \(store.onlineDevices)/\(store.devices.count)", "laptopcomputer.and.iphone")
+        info("Active alarms: \(store.activeAlarms.count)", "bell")
+        info("Devices online: \(store.onlineDevices)/\(store.devices.count)", "laptopcomputer.and.iphone")
 
         let recent = store.activeAlarms.prefix(5)
         if !recent.isEmpty {
             menu.addItem(.separator())
-            info("Ultimi allarmi")
+            info("Recent alarms")
             for a in recent {
                 let title = a.message.count > 60 ? String(a.message.prefix(57)) + "…" : a.message
                 info(title, AlarmType.icon(a.type))
@@ -73,11 +73,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         if let last = store.lastUpdated {
             menu.addItem(.separator())
-            info("Aggiornato \(Fmt.relative(last))")
+            info("Updated \(Fmt.relative(last))")
         }
 
         menu.addItem(.separator())
-        let refresh = NSMenuItem(title: "Aggiorna ora", action: #selector(refreshNow), keyEquivalent: "")
+        let refresh = NSMenuItem(title: "Refresh Now", action: #selector(refreshNow), keyEquivalent: "")
         refresh.target = self
         menu.addItem(refresh)
         return menu

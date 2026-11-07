@@ -1,27 +1,27 @@
 # FirewallaDock
 
-App macOS per il Dock che mostra lo stato della tua rete Firewalla leggendo i dati tramite la [Firewalla MSP API v2](https://docs.firewalla.net).
+A macOS Dock app that shows the status of your Firewalla network, reading data through the [Firewalla MSP API v2](https://docs.firewalla.net).
 
-> Progetto indipendente, non affiliato né approvato da Firewalla Inc.
+> Independent project, not affiliated with or endorsed by Firewalla Inc.
 
-## Funzionalità
+## Features
 
-- **Badge sull'icona del Dock** con il numero di allarmi attivi (opzionale: solo allarmi di sicurezza); `!` se la connessione fallisce
-- **Menu del Dock** (clic destro): stato dei box, allarmi attivi, dispositivi online, ultimi allarmi, aggiornamento manuale
-- **Panoramica**: statistiche, elenco box, grafici giornalieri di allarmi e flussi bloccati, allarmi per tipo
-- **Allarmi**: ricerca, filtro per tipo, archiviazione (richiede token *Full Access*)
-- **Dispositivi**: tabella ordinabile con IP, MAC, produttore, rete, traffico
-- **Flussi**: tutti o solo bloccati, con [query di ricerca](https://docs.firewalla.net/api-reference/search/) avanzate
-- Aggiornamento automatico (1–60 min) e notifiche per i nuovi allarmi
-- Token API salvato nel Portachiavi; app in sandbox con solo accesso di rete in uscita
+- **Dock icon badge** with the number of active alarms (optionally security alarms only); `!` when the connection fails
+- **Dock menu** (right-click): box status, active alarms, devices online, recent alarms, manual refresh
+- **Overview**: stats, box list, daily charts of alarms and blocked flows, alarms by type
+- **Alarms**: search, filter by type, archive (requires a *Full Access* token)
+- **Devices**: sortable table with IP, MAC, vendor, network, traffic
+- **Flows**: all or blocked only, with advanced [search queries](https://docs.firewalla.net/api-reference/search/)
+- Automatic refresh (1–60 min) and notifications for new alarms
+- API token stored in the Keychain; sandboxed app with outgoing network access only
 
-## Requisiti
+## Requirements
 
-- macOS 14 o successivo
-- Xcode 16 o successivo
-- Un account [Firewalla MSP](https://firewalla.net) con un token API
+- macOS 14 or later
+- Xcode 16 or later
+- A [Firewalla MSP](https://firewalla.net) account with an API token
 
-## Compilazione
+## Building
 
 ```bash
 git clone https://github.com/massan71/FirewallaDock.git
@@ -29,32 +29,32 @@ cd FirewallaDock
 open FirewallaDock.xcodeproj
 ```
 
-Poi ⌘R in Xcode. Da riga di comando:
+Then press ⌘R in Xcode. From the command line:
 
 ```bash
 xcodebuild -project FirewallaDock.xcodeproj -scheme FirewallaDock -configuration Release -derivedDataPath build/DerivedData build
 cp -R build/DerivedData/Build/Products/Release/FirewallaDock.app /Applications/
 ```
 
-L'app è firmata ad-hoc ("Sign to Run Locally"); per distribuirla ad altri imposta il tuo Team di sviluppo in Xcode.
+The app is ad-hoc signed ("Sign to Run Locally"); to distribute it, set your development Team in Xcode.
 
-## Configurazione
+## Setup
 
-1. In Firewalla MSP: **Settings → MSP API → Create New Token** (*Read Only* basta per la lettura).
-2. Apri l'app → **Impostazioni** (⌘,).
-3. Inserisci l'URL base (`https://<tuodominio>.firewalla.net` oppure `https://firewalla.net/api`) e il token, poi **Salva e verifica**.
+1. In Firewalla MSP: **Settings → MSP API → Create New Token** (*Read Only* is enough for viewing).
+2. Open the app → **Settings** (⌘,).
+3. Enter the base URL (`https://<yourdomain>.firewalla.net` or `https://firewalla.net/api`) and the token, then click **Save and Test**.
 
-## Struttura
+## Project structure
 
-| File | Contenuto |
+| File | Contents |
 |---|---|
-| `FirewallaDock/FirewallaAPI.swift` | Client HTTP per gli endpoint `/v2/boxes`, `/v2/devices`, `/v2/alarms`, `/v2/flows`, `/v2/trends/*` |
-| `FirewallaDock/Models.swift` | Modelli con decodifica tollerante |
-| `FirewallaDock/Store.swift` | Stato, aggiornamento periodico, badge del Dock, notifiche |
-| `FirewallaDock/App.swift` | Entry point e menu del Dock |
-| `FirewallaDock/Views.swift` | Interfaccia SwiftUI |
-| `FirewallaDock/Keychain.swift` | Salvataggio del token nel Portachiavi |
+| `FirewallaDock/FirewallaAPI.swift` | HTTP client for the `/v2/boxes`, `/v2/devices`, `/v2/alarms`, `/v2/flows`, `/v2/trends/*` endpoints |
+| `FirewallaDock/Models.swift` | Data models with lenient decoding |
+| `FirewallaDock/Store.swift` | State, periodic refresh, Dock badge, notifications |
+| `FirewallaDock/App.swift` | Entry point and Dock menu |
+| `FirewallaDock/Views.swift` | SwiftUI interface |
+| `FirewallaDock/Keychain.swift` | Keychain storage for the token |
 
-## Licenza
+## License
 
-Distribuito con licenza [MIT](LICENSE).
+Released under the [MIT](LICENSE) license.
