@@ -1,0 +1,112 @@
+import Foundation
+
+enum APIError: LocalizedError {
+    case notConfigured
+    case invalidURL
+    case http(Int, String)
+    case decoding(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .notConfigured: return "Configura URL e token nelle Impostazioni (⌘,)."
+        case .invalidURL: return "URL dell'API non valido."
+        case .http(401, _): return "Token non valido o permessi insufficienti (HTTP 401)."
+        case .http(404, _): return "Endpoint non trovato (HTTP 404). Controlla l'URL base."
+        case .http(let code, let body): return "Errore HTTP \(code): \(body.prefix(200))"
+        case .decoding(let msg): return "Risposta inattesa dall'API: \(msg)"
+        }
+    }
+}
+
+/// Client per Firewalla MSP API v2 (https://docs.firewalla.net).
+/// Base URL: `https://<tuodominio>.firewalla.net` oppure `https://firewalla.net/api`.
+struct FirewallaAPI {
+    let baseURL: String
+    let token: String
+
+    private static let session: URLSession = {
+        let cfg = URLSessionConfiguration.default
+        cfg.timeoutIntervalForRequest = 20
+        cfg.requestCachePolicy = .reloadIgnoringLocalCacheData
+        return URLSession(configuration: cfg)
+    }()
+
+    private func request(_ path: String, method: String = "GET", query: [URLQueryItem] = [], body: Data? = nil) throws -> URLRequest {
+        var base = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        if base.isEmpty || token.isEmpty { throw APIError.notConfigured }
+        if !base.lowercased().hasPrefix("http") { base = "https://" + base }
+        while base.hasSuffix("/") { base.removeLast() }
+        guard var comps = URLComponents(string: base + path) else { throw APIError.invalidURL }
+        if !query.isEmpty { comps.queryItems = query }
+        guard let url = comps.url else { throw APIError.invalidURL }
+        var req = URLRequest(url: url)
+        req.httpMethod = method
+        req.setValue("Token \(token)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let body {
+            req.httpBody = body
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        }
+        return req
+    }
+
+    private func send(_ req: URLRequest) async throws -> Data {
+        let (data, resp) = try await Self.session.data(for: req)
+        let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(code) else {
+            throw APIError.http(code, String(data: data, encoding: .utf8) ?? "")
+        }
+        return data
+    }
+
+    private func get<T: Decodable>(_ path: String, query: [URLQueryItem] = []) async throws -> T {
+        let data = try await send(try request(path, query: query))
+        do {
+            return try JSONDecoder().decode(T.self, from: data)
+        } catch {
+            throw APIError.decoding(String(describing: error))
+        }
+    }
+
+    // MARK: Endpoint
+
+    func boxes() async throws -> [Box] {
+        try await get("/v2/boxes")
+    }
+
+    func devices(box: String? = nil) async throws -> [Device] {
+        try await get("/v2/devices", query: box.map { [URLQueryItem(name: "box", value: $0)] } ?? [])
+    }
+
+    /// Scarica gli allarmi seguendo la paginazione fino a `max` elementi.
+    func alarms(query: String? = "status:active", max: Int = 500) async throws -> [Alarm] {
+        try await paged("/v2/alarms", query: query, max: max)
+    }
+
+    func flows(query: String? = nil, max: Int = 500) async throws -> [Flow] {
+        try await paged("/v2/flows", query: query, max: max)
+    }
+
+    func alarmTrend() async throws -> [TrendPoint] { try await get("/v2/trends/alarms") }
+    func blockedFlowTrend() async throws -> [TrendPoint] { try await get("/v2/trends/flows") }
+
+    /// Richiede un token "Full Access".
+    func archive(_ alarm: Alarm) async throws {
+        _ = try await send(try request("/v2/alarms/\(alarm.gid)/\(alarm.aid)/archive", method: "POST", body: Data("{}".utf8)))
+    }
+
+    private func paged<T: Decodable>(_ path: String, query: String?, max: Int) async throws -> [T] {
+        var all: [T] = []
+        var cursor: String?
+        repeat {
+            var q = [URLQueryItem(name: "limit", value: String(min(500, max - all.count)))]
+            if let query, !query.isEmpty { q.append(URLQueryItem(name: "query", value: query)) }
+            if let cursor { q.append(URLQueryItem(name: "cursor", value: cursor)) }
+            let page: Page<T> = try await get(path, query: q)
+            all += page.results
+            cursor = page.nextCursor
+            if page.results.isEmpty { break }
+        } while cursor != nil && all.count < max
+        return all
+    }
+}
