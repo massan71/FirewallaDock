@@ -54,3 +54,7 @@ L'app è firmata ad-hoc ("Sign to Run Locally"); per distribuirla ad altri impos
 | `FirewallaDock/App.swift` | Entry point e menu del Dock |
 | `FirewallaDock/Views.swift` | Interfaccia SwiftUI |
 | `FirewallaDock/Keychain.swift` | Salvataggio del token nel Portachiavi |
+
+## Licenza
+
+Distribuito con licenza [MIT](LICENSE).
