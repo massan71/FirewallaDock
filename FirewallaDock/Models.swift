@@ -294,3 +294,106 @@ enum Fmt {
         d.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(locale))
     }
 }
+
+// MARK: - Rules
+
+struct RuleTarget: Decodable, Hashable {
+    var type: String
+    var value: String?
+    var dnsOnly: Bool?
+    var port: String?
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: AnyCodingKey.self)
+        type = c.string("type") ?? ""
+        value = c.string("value")
+        dnsOnly = c.bool("dnsOnly")
+        port = c.string("port")
+    }
+
+    var description: String {
+        let v = value ?? ""
+        let base: String
+        switch type {
+        case "app": base = "App: \(v)"
+        case "category": base = "Category: \(v)"
+        case "domain", "ip", "net": base = v
+        case "internet": base = "Internet"
+        case "intranet": base = v.isEmpty ? "Local networks" : "Local network \(v)"
+        case "region": base = "Region: \(v)"
+        case "remotePort": base = "Remote port \(v)"
+        case "targetlist": base = "Target list \(v)"
+        default: base = v.isEmpty ? type : "\(type): \(v)"
+        }
+        if let port, !port.isEmpty { return "\(base):\(port)" }
+        return base
+    }
+}
+
+struct RuleScope: Decodable, Hashable {
+    var type: String
+    var value: String?
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: AnyCodingKey.self)
+        type = c.string("type") ?? ""
+        value = c.string("value")
+    }
+}
+
+struct Rule: Decodable, Identifiable, Hashable {
+    var id: String
+    var name: String?
+    var action: String
+    var target: RuleTarget?
+    var direction: String?
+    var gid: String?
+    var scope: RuleScope?
+    var notes: String
+    var status: String
+    var ts: Double?
+    var updateTs: Double?
+    var resumeTs: Double?
+    var hitCount: Int?
+    var lastHitTs: Double?
+
+    var isActive: Bool { status != "paused" }
+    var hitSort: Int { hitCount ?? 0 }
+    var targetDescription: String { target?.description ?? "—" }
+    var title: String {
+        if let name, !name.isEmpty { return name }
+        if !notes.isEmpty { return notes }
+        return targetDescription
+    }
+    // Sort helpers for Table columns
+    var activeSort: Int { isActive ? 1 : 0 }
+    var updatedSort: Double { updateTs ?? ts ?? 0 }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: AnyCodingKey.self)
+        id = c.string("id") ?? UUID().uuidString
+        name = c.string("name")
+        action = c.string("action") ?? "block"
+        target = c.object("target")
+        direction = c.string("direction")
+        gid = c.string("gid")
+        scope = c.object("scope")
+        notes = c.string("notes") ?? ""
+        status = c.string("status") ?? "active"
+        ts = c.double("ts")
+        updateTs = c.double("updateTs")
+        resumeTs = c.double("resumeTs")
+        if let hit = try? c.nestedContainer(keyedBy: AnyCodingKey.self, forKey: AnyCodingKey("hit")) {
+            hitCount = hit.int("count")
+            lastHitTs = hit.double("lastHitTs")
+        }
+    }
+
+    static func actionIcon(_ action: String) -> String {
+        switch action {
+        case "allow": return "checkmark.circle.fill"
+        case "timelimit": return "hourglass"
+        default: return "hand.raised.fill"
+        }
+    }
+}

@@ -34,7 +34,12 @@ def main():
         if base and not base.startswith("http"):
             base = "https://" + base
         base = base.rstrip("/")
-        if urllib.parse.urlparse(base).hostname:
+        parsed = urllib.parse.urlparse(base)
+        if parsed.scheme != "https":
+            print("  Only https:// URLs are allowed (the token must never be sent unencrypted). Please try again.")
+            base = ""
+            continue
+        if parsed.hostname:
             break
         print("  That is not a valid URL, please try again.")
         base = ""
@@ -56,6 +61,7 @@ def main():
         ("alarms_all", "/v2/alarms", {"limit": "5"}),
         ("flows", "/v2/flows", {"limit": "5"}),
         ("flows_blocked", "/v2/flows", {"query": "block:true", "limit": "5"}),
+        ("rules", "/v2/rules", {}),
         ("trend_alarms", "/v2/trends/alarms", {}),
         ("trend_flows", "/v2/trends/flows", {}),
     ]

@@ -3,6 +3,7 @@ import Foundation
 enum APIError: LocalizedError {
     case notConfigured
     case invalidURL
+    case insecureURL
     case http(Int, String)
     case decoding(String)
 
@@ -10,7 +11,8 @@ enum APIError: LocalizedError {
         switch self {
         case .notConfigured: return "Set the URL and token in Settings (⌘,)."
         case .invalidURL: return "Invalid API URL."
-        case .http(401, _): return "Invalid token or insufficient permissions (HTTP 401)."
+        case .insecureURL: return "The API URL must start with https:// so the token is never sent unencrypted."
+        case .http(401, _): return "Invalid token or insufficient permissions (HTTP 401). Changes require a Full Access token."
         case .http(404, _): return "Endpoint not found (HTTP 404). Check the base URL."
         case .http(let code, let body): return "HTTP error \(code): \(body.prefix(200))"
         case .decoding(let msg): return "Unexpected API response: \(msg)"
@@ -37,6 +39,8 @@ struct FirewallaAPI {
         if !base.lowercased().hasPrefix("http") { base = "https://" + base }
         while base.hasSuffix("/") { base.removeLast() }
         guard var comps = URLComponents(string: base + path) else { throw APIError.invalidURL }
+        // Never send the token unencrypted
+        guard comps.scheme?.lowercased() == "https", comps.host?.isEmpty == false else { throw APIError.insecureURL }
         if !query.isEmpty { comps.queryItems = query }
         guard let url = comps.url else { throw APIError.invalidURL }
         var req = URLRequest(url: url)
@@ -90,9 +94,22 @@ struct FirewallaAPI {
     func alarmTrend() async throws -> [TrendPoint] { try await get("/v2/trends/alarms") }
     func blockedFlowTrend() async throws -> [TrendPoint] { try await get("/v2/trends/flows") }
 
-    /// Requires a "Full Access" token.
+    func rules() async throws -> [Rule] {
+        let page: Page<Rule> = try await get("/v2/rules")
+        return page.results
+    }
+
+    // MARK: Write endpoints (require a "Full Access" token)
+
+    /// POST /v2/alarms/:gid/:aid/archive (MSP 2.11.0+). No body.
     func archive(_ alarm: Alarm) async throws {
-        _ = try await send(try request("/v2/alarms/\(alarm.gid)/\(alarm.aid)/archive", method: "POST", body: Data("{}".utf8)))
+        _ = try await send(try request("/v2/alarms/\(alarm.gid)/\(alarm.aid)/archive", method: "POST"))
+    }
+
+    /// POST /v2/rules/:id/pause or /resume. No body.
+    func setRule(_ rule: Rule, active: Bool) async throws {
+        let id = rule.id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? rule.id
+        _ = try await send(try request("/v2/rules/\(id)/\(active ? "resume" : "pause")", method: "POST"))
     }
 
     private func paged<T: Decodable>(_ path: String, query: String?, max: Int) async throws -> [T] {

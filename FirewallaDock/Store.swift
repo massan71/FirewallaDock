@@ -25,6 +25,12 @@ final class Store: ObservableObject {
     @Published var alarmTrend: [TrendPoint] = []
     @Published var flowTrend: [TrendPoint] = []
     @Published var flows: [Flow] = []
+    @Published var rules: [Rule] = []
+
+    /// Alarms the user has seen in the app (persisted). Unseen alarms show a blue dot.
+    @Published private(set) var seenAlarmIDs: Set<String> {
+        didSet { UserDefaults.standard.set(Array(seenAlarmIDs), forKey: "seenAlarmIDs") }
+    }
 
     // State
     @Published var isLoading = false
@@ -32,9 +38,12 @@ final class Store: ObservableObject {
     @Published var lastUpdated: Date?
     @Published var errorMessage: String?
     @Published var flowsError: String?
+    @Published var rulesError: String?
+    @Published var busyRuleIDs: Set<String> = []
+    @Published var archiveProgress: (done: Int, total: Int)?
 
     private var timerTask: Task<Void, Never>?
-    private var seenAlarmIDs: Set<String>?
+    private var notifiedAlarmIDs: Set<String>?
 
     var isConfigured: Bool { !baseURL.trimmingCharacters(in: .whitespaces).isEmpty && !token.isEmpty }
     var api: FirewallaAPI { FirewallaAPI(baseURL: baseURL, token: token) }
@@ -54,11 +63,14 @@ final class Store: ObservableObject {
         notifyNewAlarms = d.object(forKey: "notifyNewAlarms") as? Bool ?? true
         badgeSecurityOnly = d.bool(forKey: "badgeSecurityOnly")
         menuBarShowsCount = d.object(forKey: "menuBarShowsCount") as? Bool ?? true
+        seenAlarmIDs = Set(d.stringArray(forKey: "seenAlarmIDs") ?? [])
     }
 
     /// True when something needs attention: a box is offline or the last refresh failed.
     var hasProblem: Bool { boxes.contains { !$0.online } || (isConfigured && errorMessage != nil) }
     var securityAlarmCount: Int { activeAlarms.filter { AlarmType.isSecurity($0.type) }.count }
+    var seenActiveAlarms: [Alarm] { activeAlarms.filter { seenAlarmIDs.contains($0.id) } }
+    var activeRules: Int { rules.filter(\.isActive).count }
 
     // MARK: Refresh loop
 
@@ -94,6 +106,7 @@ final class Store: ObservableObject {
         async let a = api.alarms(query: "status:active", max: 1000)
         async let at = api.alarmTrend()
         async let ft = api.blockedFlowTrend()
+        async let r = api.rules()
 
         var errors: [String] = []
         do { boxes = try await b.sorted { $0.name < $1.name } } catch { errors.append("Boxes: \(error.localizedDescription)") }
@@ -102,7 +115,16 @@ final class Store: ObservableObject {
             let fetched = try await a
             notifyNew(fetched)
             alarms = fetched.sorted { $0.ts > $1.ts }
+            // Forget seen IDs of alarms that are no longer active
+            let ids = Set(fetched.map(\.id))
+            if !seenAlarmIDs.isSubset(of: ids) { seenAlarmIDs.formIntersection(ids) }
         } catch { errors.append("Alarms: \(error.localizedDescription)") }
+        do {
+            rules = try await r
+            rulesError = nil
+        } catch {
+            rulesError = error.localizedDescription
+        }
         // Trends are optional: no error if unavailable
         alarmTrend = (try? await at) ?? []
         flowTrend = (try? await ft) ?? []
@@ -124,13 +146,71 @@ final class Store: ObservableObject {
         }
     }
 
-    func archive(_ alarm: Alarm) async {
+    // MARK: Seen alarms
+
+    func markSeen<S: Sequence>(_ ids: S) where S.Element == String {
+        let new = seenAlarmIDs.union(ids)
+        if new != seenAlarmIDs { seenAlarmIDs = new }
+    }
+
+    func markAllSeen() { markSeen(activeAlarms.map(\.id)) }
+
+    // MARK: Archiving (requires a Full Access token)
+
+    /// Archives the given alarms, 4 requests at a time. Returns how many failed.
+    @discardableResult
+    func archive(_ toArchive: [Alarm]) async -> Int {
+        guard !toArchive.isEmpty, archiveProgress == nil else { return 0 }
+        let api = self.api
+        archiveProgress = (0, toArchive.count)
+        var archived: Set<String> = []
+        var lastError: Error?
+
+        await withTaskGroup(of: (String, Error?).self) { group in
+            var iterator = toArchive.makeIterator()
+            func addNext() {
+                guard let alarm = iterator.next() else { return }
+                group.addTask {
+                    do { try await api.archive(alarm); return (alarm.id, nil) }
+                    catch { return (alarm.id, error) }
+                }
+            }
+            for _ in 0..<4 { addNext() }
+            for await (id, error) in group {
+                if let error { lastError = error } else { archived.insert(id) }
+                archiveProgress = ((archiveProgress?.done ?? 0) + 1, toArchive.count)
+                // Stop early on permission errors: every other request would fail too
+                if case APIError.http(401, _)? = error { group.cancelAll(); break }
+                addNext()
+            }
+        }
+
+        alarms.removeAll { archived.contains($0.id) }
+        seenAlarmIDs.subtract(archived)
+        archiveProgress = nil
+        let failed = toArchive.count - archived.count
+        if let lastError, failed > 0 {
+            errorMessage = "Could not archive \(failed) of \(toArchive.count) alarm(s): \(lastError.localizedDescription)"
+        }
+        updateDock()
+        return failed
+    }
+
+    // MARK: Rules (requires a Full Access token)
+
+    func setRule(_ rule: Rule, active: Bool) async {
+        guard !busyRuleIDs.contains(rule.id) else { return }
+        busyRuleIDs.insert(rule.id)
+        defer { busyRuleIDs.remove(rule.id) }
         do {
-            try await api.archive(alarm)
-            alarms.removeAll { $0.id == alarm.id }
-            updateDock()
+            try await api.setRule(rule, active: active)
+            if let i = rules.firstIndex(where: { $0.id == rule.id }) {
+                rules[i].status = active ? "active" : "paused"
+                if active { rules[i].resumeTs = nil }
+            }
+            rulesError = nil
         } catch {
-            errorMessage = "Archiving failed: \(error.localizedDescription) (requires a Full Access token)"
+            rulesError = "Could not \(active ? "resume" : "pause") the rule: \(error.localizedDescription)"
         }
     }
 
@@ -161,9 +241,9 @@ final class Store: ObservableObject {
 
     private func notifyNew(_ fetched: [Alarm]) {
         let ids = Set(fetched.map(\.id))
-        defer { seenAlarmIDs = (seenAlarmIDs ?? []).union(ids) }
+        defer { notifiedAlarmIDs = (notifiedAlarmIDs ?? []).union(ids) }
         // Do not notify existing alarms on first load
-        guard let seen = seenAlarmIDs, notifyNewAlarms, canNotify else { return }
+        guard let seen = notifiedAlarmIDs, notifyNewAlarms, canNotify else { return }
         let new = fetched.filter { !seen.contains($0.id) }.prefix(5)
         for alarm in new {
             let content = UNMutableNotificationContent()

@@ -5,6 +5,7 @@ enum SidebarItem: String, CaseIterable, Identifiable {
     case overview = "Overview"
     case alarms = "Alarms"
     case devices = "Devices"
+    case rules = "Rules"
     case flows = "Flows"
     var id: String { rawValue }
     var icon: String {
@@ -12,6 +13,7 @@ enum SidebarItem: String, CaseIterable, Identifiable {
         case .overview: return "gauge.with.dots.needle.33percent"
         case .alarms: return "bell.badge"
         case .devices: return "laptopcomputer.and.iphone"
+        case .rules: return "list.bullet.rectangle"
         case .flows: return "arrow.left.arrow.right"
         }
     }
@@ -41,6 +43,7 @@ struct ContentView: View {
                     case .overview: OverviewView()
                     case .alarms: AlarmsView()
                     case .devices: DevicesView()
+                    case .rules: RulesView()
                     case .flows: FlowsView()
                     }
                 }
@@ -219,57 +222,140 @@ struct AlarmsView: View {
     @EnvironmentObject var store: Store
     @State private var search = ""
     @State private var typeFilter = 0
-    @State private var selection: Alarm.ID?
+    @State private var seenFilter = 0 // 0 all, 1 new, 2 seen
+    @State private var selection = Set<Alarm.ID>()
+    @State private var pendingArchive: [Alarm] = []
+    @State private var confirmArchive = false
 
     var filtered: [Alarm] {
         store.activeAlarms.filter { a in
-            (typeFilter == 0 || a.type == typeFilter) &&
-            (search.isEmpty || a.message.localizedCaseInsensitiveContains(search)
-                || a.deviceName.localizedCaseInsensitiveContains(search))
+            let seen = store.seenAlarmIDs.contains(a.id)
+            return (typeFilter == 0 || a.type == typeFilter) &&
+                (seenFilter == 0 || (seenFilter == 2) == seen) &&
+                (search.isEmpty || a.message.localizedCaseInsensitiveContains(search)
+                    || a.deviceName.localizedCaseInsensitiveContains(search))
         }
+    }
+
+    private var selectedAlarms: [Alarm] { store.activeAlarms.filter { selection.contains($0.id) } }
+
+    private func requestArchive(_ alarms: [Alarm]) {
+        guard !alarms.isEmpty else { return }
+        pendingArchive = alarms
+        confirmArchive = true
     }
 
     var body: some View {
         let presentTypes = Set(store.activeAlarms.map(\.type))
-        Table(filtered, selection: $selection) {
-            TableColumn("") { a in
-                Image(systemName: AlarmType.icon(a.type))
-                    .foregroundStyle(AlarmType.isSecurity(a.type) ? .red : .orange)
-            }.width(22)
-            TableColumn("When") { a in
-                Text(Fmt.relative(a.date)).help(Fmt.dateTime(a.date))
-            }.width(min: 80, ideal: 100)
-            TableColumn("Type") { a in Text(a.typeName) }.width(min: 110, ideal: 150)
-            TableColumn("Message") { a in Text(a.message).help(a.message) }
-            TableColumn("Device") { a in Text(a.deviceName) }.width(min: 90, ideal: 140)
-            TableColumn("Remote") { a in
-                Text([a.remote?.domain ?? a.remote?.ip, a.remote?.region].compactMap { $0 }.joined(separator: " · "))
-            }.width(min: 90, ideal: 160)
-        }
-        .contextMenu(forSelectionType: Alarm.ID.self) { ids in
-            if let id = ids.first, let alarm = store.alarms.first(where: { $0.id == id }) {
-                Button("Copy Message") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(alarm.message, forType: .string)
+        let seenCount = store.seenActiveAlarms.count
+        VStack(spacing: 0) {
+            Table(filtered, selection: $selection) {
+                TableColumn("") { a in
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(store.seenAlarmIDs.contains(a.id) ? Color.clear : Color.blue)
+                            .frame(width: 7, height: 7)
+                            .help("New")
+                        Image(systemName: AlarmType.icon(a.type))
+                            .foregroundStyle(AlarmType.isSecurity(a.type) ? .red : .orange)
+                    }
+                }.width(36)
+                TableColumn("When") { a in
+                    Text(Fmt.relative(a.date)).help(Fmt.dateTime(a.date))
+                }.width(min: 80, ideal: 100)
+                TableColumn("Type") { a in Text(a.typeName) }.width(min: 110, ideal: 150)
+                TableColumn("Message") { a in
+                    Text(a.message)
+                        .fontWeight(store.seenAlarmIDs.contains(a.id) ? .regular : .semibold)
+                        .help(a.message)
                 }
-                Button("Archive Alarm") { Task { await store.archive(alarm) } }
+                TableColumn("Device") { a in Text(a.deviceName) }.width(min: 90, ideal: 140)
+                TableColumn("Remote") { a in
+                    Text([a.remote?.domain ?? a.remote?.ip, a.remote?.region].compactMap { $0 }.joined(separator: " · "))
+                }.width(min: 90, ideal: 160)
+            }
+            .contextMenu(forSelectionType: Alarm.ID.self) { ids in
+                let alarms = store.activeAlarms.filter { ids.contains($0.id) }
+                if alarms.count == 1, let alarm = alarms.first {
+                    Button("Copy Message") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(alarm.message, forType: .string)
+                    }
+                }
+                if !alarms.isEmpty {
+                    Button("Mark as Seen") { store.markSeen(ids) }
+                    Button(alarms.count == 1 ? "Archive Alarm" : "Archive \(alarms.count) Alarms") {
+                        requestArchive(alarms)
+                    }
+                }
+            }
+            .onChange(of: selection) { _, ids in store.markSeen(ids) }
+            .onDeleteCommand { requestArchive(selectedAlarms) }
+
+            if let progress = store.archiveProgress {
+                HStack {
+                    ProgressView(value: Double(progress.done), total: Double(max(progress.total, 1)))
+                    Text("Archiving \(progress.done) of \(progress.total)…").font(.caption).monospacedDigit()
+                }
+                .padding(8)
             }
         }
         .searchable(text: $search, prompt: "Search alarms")
         .toolbar {
-            ToolbarItem(placement: .navigation) {
+            ToolbarItemGroup(placement: .navigation) {
+                Picker("Show", selection: $seenFilter) {
+                    Text("All").tag(0)
+                    Text("New").tag(1)
+                    Text("Seen").tag(2)
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 150)
                 Picker("Type", selection: $typeFilter) {
                     Text("All types").tag(0)
                     ForEach(AlarmType.all.filter { presentTypes.contains($0.0) }, id: \.0) { t in
                         Text(t.1).tag(t.0)
                     }
                 }
-                .frame(width: 200)
+                .frame(width: 180)
             }
+            ToolbarItemGroup {
+                Button {
+                    store.markAllSeen()
+                } label: { Label("Mark All as Seen", systemImage: "eye") }
+                .help("Mark all alarms as seen")
+                .disabled(seenCount == store.activeAlarms.count)
+
+                Button {
+                    requestArchive(selectedAlarms)
+                } label: { Label("Archive Selected", systemImage: "archivebox") }
+                .help("Archive the selected alarms (⌫)")
+                .disabled(selection.isEmpty || store.archiveProgress != nil)
+
+                Button {
+                    requestArchive(store.seenActiveAlarms)
+                } label: { Label("Archive Seen (\(seenCount))", systemImage: "archivebox.fill") }
+                .help("Archive every alarm you have already seen")
+                .disabled(seenCount == 0 || store.archiveProgress != nil)
+            }
+        }
+        .confirmationDialog(
+            pendingArchive.count == 1 ? "Archive this alarm?" : "Archive \(pendingArchive.count) alarms?",
+            isPresented: $confirmArchive
+        ) {
+            Button(pendingArchive.count == 1 ? "Archive" : "Archive \(pendingArchive.count)") {
+                let alarms = pendingArchive
+                selection.subtract(alarms.map(\.id))
+                Task { await store.archive(alarms) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Archived alarms leave the active list but stay available as archived in Firewalla. This requires a Full Access API token.")
         }
         .overlay {
             if store.activeAlarms.isEmpty && !store.isLoading {
                 ContentUnavailableView("No active alarms", systemImage: "checkmark.shield")
+            } else if filtered.isEmpty {
+                ContentUnavailableView.search
             }
         }
     }
