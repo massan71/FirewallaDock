@@ -146,6 +146,12 @@ final class Store: ObservableObject {
         }
     }
 
+    /// Hides the current error until the next refresh or action fails again.
+    func dismissError() {
+        errorMessage = nil
+        updateDock()
+    }
+
     // MARK: Seen alarms
 
     func markSeen<S: Sequence>(_ ids: S) where S.Element == String {

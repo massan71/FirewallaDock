@@ -44,7 +44,7 @@ struct RulesView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if let err = store.rulesError { ErrorBanner(message: err) }
+            if let err = store.rulesError { ErrorBanner(message: err) { store.rulesError = nil } }
 
             Table(filtered, sortOrder: $sortOrder) {
                 TableColumn("On", value: \.activeSort) { rule in

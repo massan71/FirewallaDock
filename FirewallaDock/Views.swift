@@ -34,7 +34,7 @@ struct ContentView: View {
         } detail: {
             VStack(spacing: 0) {
                 if let err = store.errorMessage {
-                    ErrorBanner(message: err)
+                    ErrorBanner(message: err) { store.dismissError() }
                 }
                 if !store.isConfigured {
                     OnboardingView()
@@ -71,11 +71,18 @@ struct ContentView: View {
 
 struct ErrorBanner: View {
     let message: String
+    let onDismiss: () -> Void
+
     var body: some View {
         HStack(alignment: .top) {
             Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
             Text(message).font(.callout).textSelection(.enabled)
             Spacer()
+            Button(action: onDismiss) {
+                Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+            }
+            .buttonStyle(.borderless)
+            .help("Dismiss")
         }
         .padding(10)
         .background(.orange.opacity(0.12))
@@ -450,7 +457,7 @@ struct FlowsView: View {
             }
             .padding(10)
 
-            if let err = store.flowsError { ErrorBanner(message: err) }
+            if let err = store.flowsError { ErrorBanner(message: err) { store.flowsError = nil } }
 
             Table(store.flows.sorted(using: sortOrder), sortOrder: $sortOrder) {
                 TableColumn("", value: \.tsSort) { f in

@@ -29,10 +29,20 @@ struct MenuBarView: View {
                     .font(.callout).foregroundStyle(.secondary)
             } else {
                 if let err = store.errorMessage {
-                    Label(err, systemImage: "exclamationmark.triangle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                        .lineLimit(3)
+                    HStack(alignment: .top) {
+                        Label(err, systemImage: "exclamationmark.triangle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                            .lineLimit(3)
+                        Spacer(minLength: 4)
+                        Button {
+                            store.dismissError()
+                        } label: {
+                            Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Dismiss")
+                    }
                 }
                 boxes
                 stats
