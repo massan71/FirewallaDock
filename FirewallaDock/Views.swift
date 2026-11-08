@@ -411,6 +411,7 @@ struct SettingsView: View {
     @State private var urlDraft = ""
     @State private var testResult: String?
     @State private var testing = false
+    @AppStorage(SettingsKey.showMenuBar) private var showMenuBar = true
 
     var body: some View {
         Form {
@@ -444,6 +445,14 @@ struct SettingsView: View {
                 }
                 Toggle("Notify about new alarms", isOn: $store.notifyNewAlarms)
                 Toggle("Dock badge for security alarms only", isOn: $store.badgeSecurityOnly)
+            }
+
+            Section("Menu Bar") {
+                Toggle("Show in menu bar", isOn: $showMenuBar)
+                Toggle("Show alarm count next to the icon", isOn: $store.menuBarShowsCount)
+                    .disabled(!showMenuBar)
+                Text("The count follows the Dock badge setting above.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)

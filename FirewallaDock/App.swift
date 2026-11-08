@@ -4,7 +4,11 @@ import SwiftUI
 @main
 struct FirewallaDockApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @StateObject private var store = Store.shared
+    /// The App must not observe the Store: every data refresh would rebuild all scenes,
+    /// which re-enters SwiftUI's window updates and overflows the stack. Views observe
+    /// the Store through environmentObject; the App only watches the menu bar setting.
+    private let store = Store.shared
+    @AppStorage(SettingsKey.showMenuBar) private var showMenuBar = true
 
     var body: some Scene {
         Window("Firewalla", id: "main") {
@@ -23,6 +27,15 @@ struct FirewallaDockApp: App {
             SettingsView()
                 .environmentObject(store)
         }
+
+        MenuBarExtra(isInserted: $showMenuBar) {
+            MenuBarView()
+                .environmentObject(store)
+        } label: {
+            MenuBarLabel()
+                .environmentObject(store)
+        }
+        .menuBarExtraStyle(.window)
     }
 }
 

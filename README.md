@@ -8,6 +8,7 @@ A macOS Dock app that shows the status of your Firewalla network, reading data t
 
 - **Dock icon badge** with the number of active alarms (optionally security alarms only); `!` when the connection fails
 - **Dock menu** (right-click): box status, active alarms, devices online, recent alarms, manual refresh
+- **Menu bar icon** (optional): shield with the alarm count and a panel with box status, alarm and device counts, recent alarms and quick actions
 - **Overview**: stats, box list, daily charts of alarms and blocked flows, alarms by type
 - **Alarms**: search, filter by type, archive (requires a *Full Access* token)
 - **Devices**: sortable table with IP, MAC, vendor, network, traffic
@@ -66,6 +67,7 @@ The saved responses contain your device names and MAC addresses, so do not share
 | `FirewallaDock/Store.swift` | State, periodic refresh, Dock badge, notifications |
 | `FirewallaDock/App.swift` | Entry point and Dock menu |
 | `FirewallaDock/Views.swift` | SwiftUI interface |
+| `FirewallaDock/MenuBarView.swift` | Menu bar icon and panel |
 | `FirewallaDock/Keychain.swift` | Keychain storage for the token |
 
 ## License

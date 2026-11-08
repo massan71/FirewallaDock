@@ -2,6 +2,10 @@ import AppKit
 import Foundation
 import UserNotifications
 
+enum SettingsKey {
+    static let showMenuBar = "showMenuBar"
+}
+
 @MainActor
 final class Store: ObservableObject {
     static let shared = Store()
@@ -12,6 +16,7 @@ final class Store: ObservableObject {
     @Published var refreshMinutes: Int { didSet { UserDefaults.standard.set(refreshMinutes, forKey: "refreshMinutes"); restartTimer() } }
     @Published var notifyNewAlarms: Bool { didSet { UserDefaults.standard.set(notifyNewAlarms, forKey: "notifyNewAlarms"); if notifyNewAlarms { requestNotificationPermission() } } }
     @Published var badgeSecurityOnly: Bool { didSet { UserDefaults.standard.set(badgeSecurityOnly, forKey: "badgeSecurityOnly"); updateDock() } }
+    @Published var menuBarShowsCount: Bool { didSet { UserDefaults.standard.set(menuBarShowsCount, forKey: "menuBarShowsCount") } }
 
     // Data
     @Published var boxes: [Box] = []
@@ -48,7 +53,12 @@ final class Store: ObservableObject {
         refreshMinutes = d.object(forKey: "refreshMinutes") as? Int ?? 5
         notifyNewAlarms = d.object(forKey: "notifyNewAlarms") as? Bool ?? true
         badgeSecurityOnly = d.bool(forKey: "badgeSecurityOnly")
+        menuBarShowsCount = d.object(forKey: "menuBarShowsCount") as? Bool ?? true
     }
+
+    /// True when something needs attention: a box is offline or the last refresh failed.
+    var hasProblem: Bool { boxes.contains { !$0.online } || (isConfigured && errorMessage != nil) }
+    var securityAlarmCount: Int { activeAlarms.filter { AlarmType.isSecurity($0.type) }.count }
 
     // MARK: Refresh loop
 
