@@ -233,6 +233,8 @@ struct AlarmsView: View {
     @State private var selection = Set<Alarm.ID>()
     @State private var pendingArchive: [Alarm] = []
     @State private var confirmArchive = false
+    @State private var pendingAction: AlarmAction?
+    @State private var confirmAction = false
 
     var filtered: [Alarm] {
         store.activeAlarms.filter { a in
@@ -245,6 +247,11 @@ struct AlarmsView: View {
     }
 
     private var selectedAlarms: [Alarm] { store.activeAlarms.filter { selection.contains($0.id) } }
+
+    private func requestAction(_ action: AlarmAction) {
+        pendingAction = action
+        confirmAction = true
+    }
 
     private func requestArchive(_ alarms: [Alarm]) {
         guard !alarms.isEmpty else { return }
@@ -295,8 +302,40 @@ struct AlarmsView: View {
                         requestArchive(alarms)
                     }
                 }
+                if alarms.count == 1, let alarm = alarms.first {
+                    Divider()
+                    Menu("Mute") {
+                        ForEach(AlarmAction.muteOptions(for: alarm)) { action in
+                            Button(action.menuTitle) { requestAction(action) }
+                        }
+                    }
+                    let blocks = AlarmAction.blockOptions(for: alarm)
+                    if !blocks.isEmpty {
+                        Menu("Block") {
+                            ForEach(blocks) { action in
+                                Button(action.menuTitle) { requestAction(action) }
+                            }
+                        }
+                    }
+                }
             }
             .onChange(of: selection) { _, ids in store.markSeen(ids) }
+            .confirmationDialog(pendingAction?.confirmTitle ?? "", isPresented: $confirmAction, presenting: pendingAction) { action in
+                let matching = store.matchingAlarms(for: action)
+                Button(action.verb) {
+                    Task { await store.perform(action, archiveMatching: false) }
+                }
+                if !matching.isEmpty {
+                    Button("\(action.verb) and Archive \(matching.count + (action.kind == .block ? 1 : 0)) Matching") {
+                        selection.subtract(matching.map(\.id))
+                        Task { await store.perform(action, archiveMatching: true) }
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: { action in
+                let matching = store.matchingAlarms(for: action)
+                Text(action.confirmMessage + (matching.isEmpty ? "" : "\n\n\(matching.count) other active alarm(s) match."))
+            }
             .onDeleteCommand { requestArchive(selectedAlarms) }
 
             if let progress = store.archiveProgress {

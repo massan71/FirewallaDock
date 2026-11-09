@@ -112,6 +112,32 @@ struct FirewallaAPI {
         _ = try await send(try request("/v2/rules/\(id)/\(active ? "resume" : "pause")", method: "POST"))
     }
 
+    /// POST /v2/alarms/:gid/:aid/mute (MSP 2.11.0+).
+    /// Firewalla archives this alarm and stops creating matching ones (a silence exception).
+    func mute(_ alarm: Alarm, target: APIPart, scope: APIPart) async throws {
+        let body = try JSONEncoder().encode(MuteBody(target: target, scope: scope))
+        _ = try await send(try request("/v2/alarms/\(alarm.gid)/\(alarm.aid)/mute", method: "POST", body: body))
+    }
+
+    /// DELETE /v2/rules/:id (MSP 2.11.0+).
+    func deleteRule(_ rule: Rule) async throws {
+        let id = rule.id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? rule.id
+        _ = try await send(try request("/v2/rules/\(id)", method: "DELETE"))
+    }
+
+    /// POST /v2/rules: creates a block rule and returns it.
+    func createBlockRule(gid: String, target: APIPart, scope: APIPart?, notes: String) async throws -> Rule {
+        let body = try JSONEncoder().encode(
+            NewRuleBody(action: "block", direction: "bidirection", gid: gid, notes: notes, target: target, scope: scope)
+        )
+        let data = try await send(try request("/v2/rules", method: "POST", body: body))
+        do {
+            return try JSONDecoder().decode(Rule.self, from: data)
+        } catch {
+            throw APIError.decoding(String(describing: error))
+        }
+    }
+
     private func paged<T: Decodable>(_ path: String, query: String?, max: Int) async throws -> [T] {
         var all: [T] = []
         var cursor: String?
@@ -126,4 +152,27 @@ struct FirewallaAPI {
         } while cursor != nil && all.count < max
         return all
     }
+}
+
+// MARK: - Request bodies
+
+/// A `{type, value}` pair used by mute targets/scopes and rule targets/scopes.
+/// `value` is omitted from the JSON when nil (e.g. `{"type": "all"}`).
+struct APIPart: Encodable, Hashable {
+    var type: String
+    var value: String?
+}
+
+private struct MuteBody: Encodable {
+    var target: APIPart
+    var scope: APIPart
+}
+
+private struct NewRuleBody: Encodable {
+    var action: String
+    var direction: String
+    var gid: String
+    var notes: String
+    var target: APIPart
+    var scope: APIPart?
 }

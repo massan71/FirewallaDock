@@ -10,9 +10,9 @@ A macOS Dock app that shows the status of your Firewalla network, reading data t
 - **Dock menu** (right-click): box status, active alarms, devices online, recent alarms, manual refresh
 - **Menu bar icon** (optional): shield with the alarm count and a panel with box status, alarm and device counts, recent alarms and quick actions
 - **Overview**: stats, box list, daily charts of alarms and blocked flows, alarms by type
-- **Alarms**: search, filter by type, new/seen tracking, archive selected or all seen alarms (requires a *Full Access* token)
+- **Alarms**: search, filter by type, new/seen tracking, archive selected or all seen alarms; right-click to **mute** an alarm type, domain or IP (everywhere or for one device) or **block** the remote domain or IP with a new rule (requires a *Full Access* token)
 - **Devices**: sortable table with IP, MAC, vendor, network, traffic
-- **Rules**: every Firewalla rule with its target, scope and hit count, and a switch to pause or resume it (requires a *Full Access* token)
+- **Rules**: every Firewalla rule with its target, scope and hit count, a switch to pause or resume it, and right-click to delete it (requires a *Full Access* token)
 - **Flows**: all or blocked only, with advanced [search queries](https://docs.firewalla.net/api-reference/search/) (requires a paid MSP plan, see below)
 - Automatic refresh (1–60 min) and notifications for new alarms
 - API token stored in the Keychain and only ever sent over HTTPS; sandboxed app with outgoing network access only
@@ -46,7 +46,7 @@ The app is ad-hoc signed ("Sign to Run Locally"); to distribute it, set your dev
 
 ## Setup
 
-1. In Firewalla MSP: **Settings → MSP API → Create New Token**. *Read Only* is enough for viewing; *Full Access* is needed to archive alarms and pause or resume rules.
+1. In Firewalla MSP: **Settings → MSP API → Create New Token**. *Read Only* is enough for viewing; *Full Access* is needed to archive or mute alarms and to create, pause, resume or delete rules.
 2. Open the app → **Settings** (⌘,).
 3. Enter the base URL (`https://<yourdomain>.firewalla.net` or `https://firewalla.net/api`) and the token, then click **Save and Test**.
 
@@ -65,13 +65,14 @@ The saved responses contain your device names and MAC addresses, so do not share
 
 | File | Contents |
 |---|---|
-| `FirewallaDock/FirewallaAPI.swift` | HTTP client for the `/v2/boxes`, `/v2/devices`, `/v2/alarms`, `/v2/flows`, `/v2/rules`, `/v2/trends/*` endpoints, plus alarm archive and rule pause/resume |
+| `FirewallaDock/FirewallaAPI.swift` | HTTP client for the `/v2/boxes`, `/v2/devices`, `/v2/alarms`, `/v2/flows`, `/v2/rules`, `/v2/trends/*` endpoints, plus alarm archive/mute and rule create/pause/resume/delete |
 | `FirewallaDock/Models.swift` | Data models with lenient decoding |
 | `FirewallaDock/Store.swift` | State, periodic refresh, Dock badge, notifications |
 | `FirewallaDock/App.swift` | Entry point and Dock menu |
 | `FirewallaDock/Views.swift` | SwiftUI interface |
 | `FirewallaDock/MenuBarView.swift` | Menu bar icon and panel |
-| `FirewallaDock/RulesView.swift` | Rules list with pause/resume |
+| `FirewallaDock/RulesView.swift` | Rules list with pause/resume and delete |
+| `FirewallaDock/AlarmActions.swift` | Mute and block options offered for an alarm |
 | `FirewallaDock/Keychain.swift` | Keychain storage for the token |
 
 ## License

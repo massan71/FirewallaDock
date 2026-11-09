@@ -202,7 +202,53 @@ final class Store: ObservableObject {
         return failed
     }
 
+    // MARK: Mute / block from an alarm (requires a Full Access token)
+
+    /// Alarms (other than the action's own) that the action covers.
+    func matchingAlarms(for action: AlarmAction) -> [Alarm] {
+        activeAlarms.filter { $0.id != action.alarm.id && action.matches($0) }
+    }
+
+    func perform(_ action: AlarmAction, archiveMatching: Bool) async {
+        let matching = matchingAlarms(for: action)
+        do {
+            switch action.kind {
+            case .mute:
+                try await api.mute(action.alarm, target: action.target, scope: action.muteScope)
+                // Firewalla archives the muted alarm itself
+                alarms.removeAll { $0.id == action.alarm.id }
+                seenAlarmIDs.remove(action.alarm.id)
+            case .block:
+                let rule = try await api.createBlockRule(gid: action.alarm.gid, target: action.target,
+                                                         scope: action.ruleScope, notes: action.ruleNotes)
+                rules.insert(rule, at: 0)
+            }
+        } catch {
+            errorMessage = "\(action.verb) failed: \(error.localizedDescription)"
+            updateDock()
+            return
+        }
+        updateDock()
+        if archiveMatching {
+            // A block rule doesn't archive anything, so include the alarm itself
+            await archive(action.kind == .block ? [action.alarm] + matching : matching)
+        }
+    }
+
     // MARK: Rules (requires a Full Access token)
+
+    func deleteRule(_ rule: Rule) async {
+        guard !busyRuleIDs.contains(rule.id) else { return }
+        busyRuleIDs.insert(rule.id)
+        defer { busyRuleIDs.remove(rule.id) }
+        do {
+            try await api.deleteRule(rule)
+            rules.removeAll { $0.id == rule.id }
+            rulesError = nil
+        } catch {
+            rulesError = "Could not delete the rule: \(error.localizedDescription)"
+        }
+    }
 
     func setRule(_ rule: Rule, active: Bool) async {
         guard !busyRuleIDs.contains(rule.id) else { return }

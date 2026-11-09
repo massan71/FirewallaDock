@@ -8,6 +8,9 @@ struct RulesView: View {
     @State private var search = ""
     @State private var statusFilter = 0 // 0 all, 1 active, 2 paused
     @State private var sortOrder = [KeyPathComparator(\Rule.updatedSort, order: .reverse)]
+    @State private var selection = Set<Rule.ID>()
+    @State private var pendingDelete: Rule?
+    @State private var confirmDelete = false
 
     private var deviceNames: [String: String] {
         Dictionary(store.devices.map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a })
@@ -46,7 +49,7 @@ struct RulesView: View {
         VStack(spacing: 0) {
             if let err = store.rulesError { ErrorBanner(message: err) { store.rulesError = nil } }
 
-            Table(filtered, sortOrder: $sortOrder) {
+            Table(filtered, selection: $selection, sortOrder: $sortOrder) {
                 TableColumn("On", value: \.activeSort) { rule in
                     if store.busyRuleIDs.contains(rule.id) {
                         ProgressView().controlSize(.mini)
@@ -88,6 +91,27 @@ struct RulesView: View {
                     }
                 }.width(min: 70, ideal: 120)
             }
+            .contextMenu(forSelectionType: Rule.ID.self) { ids in
+                if ids.count == 1, let rule = store.rules.first(where: { ids.contains($0.id) }) {
+                    Button(rule.isActive ? "Pause Rule" : "Resume Rule") {
+                        Task { await store.setRule(rule, active: !rule.isActive) }
+                    }
+                    Divider()
+                    Button("Delete Rule…") {
+                        pendingDelete = rule
+                        confirmDelete = true
+                    }
+                }
+            }
+            .confirmationDialog("Delete this rule?", isPresented: $confirmDelete, presenting: pendingDelete) { rule in
+                Button("Delete", role: .destructive) {
+                    selection.remove(rule.id)
+                    Task { await store.deleteRule(rule) }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: { rule in
+                Text("“\(rule.title)” will be removed from Firewalla. This can't be undone; to stop it temporarily, pause it instead. Requires a Full Access API token.")
+            }
             .searchable(text: $search, prompt: "Search rules")
             .toolbar {
                 ToolbarItem(placement: .navigation) {
@@ -107,7 +131,7 @@ struct RulesView: View {
                 }
             }
 
-            Text("Pausing or resuming a rule requires a Full Access API token. Box services such as ad block or family protection can't be switched through the MSP API.")
+            Text("Pausing, resuming or deleting a rule (right-click) requires a Full Access API token. Box services such as ad block or family protection can't be switched through the MSP API.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
