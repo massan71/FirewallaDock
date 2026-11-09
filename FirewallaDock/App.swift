@@ -40,12 +40,17 @@ struct FirewallaDockApp: App {
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        // Menu bar only mode: start without a Dock icon
+        if !DockIcon.shouldShow { NSApp.setActivationPolicy(.accessory) }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         Task { @MainActor in Store.shared.start() }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        false // stay in the Dock and keep updating the badge
+        false // keep running in the Dock / menu bar and keep updating the badge
     }
 
     /// Menu shown when right-clicking the Dock icon.

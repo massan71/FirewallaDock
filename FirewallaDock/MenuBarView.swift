@@ -134,6 +134,8 @@ struct MenuBarView: View {
                 Image(systemName: "gearshape")
             }
             .buttonStyle(.borderless)
+            // Without a Dock icon the app isn't active, so bring the Settings window to the front
+            .simultaneousGesture(TapGesture().onEnded { NSApp.activate(ignoringOtherApps: true) })
             .help("Settings")
             Button {
                 NSApp.terminate(nil)

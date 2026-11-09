@@ -544,6 +544,10 @@ struct SettingsView: View {
     @State private var testResult: String?
     @State private var testing = false
     @AppStorage(SettingsKey.showMenuBar) private var showMenuBar = true
+    @AppStorage(SettingsKey.showDockIcon) private var showDockIcon = true
+    @State private var openAtLogin = LoginItem.isEnabled
+    @State private var loginNeedsApproval = LoginItem.needsApproval
+    @State private var loginError: String?
 
     var body: some View {
         Form {
@@ -579,18 +583,58 @@ struct SettingsView: View {
                 Toggle("Dock badge for security alarms only", isOn: $store.badgeSecurityOnly)
             }
 
-            Section("Menu Bar") {
+            Section("Menu Bar and Dock") {
                 Toggle("Show in menu bar", isOn: $showMenuBar)
                 Toggle("Show alarm count next to the icon", isOn: $store.menuBarShowsCount)
                     .disabled(!showMenuBar)
                 Text("The count follows the Dock badge setting above.")
                     .font(.caption).foregroundStyle(.secondary)
+                Toggle("Show icon in the Dock", isOn: $showDockIcon)
+                    .disabled(!showMenuBar)
+                Text(showMenuBar
+                     ? "Turn this off to use FirewallaDock only from the menu bar."
+                     : "The Dock icon can only be hidden while the menu bar icon is shown.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
+            Section("Startup") {
+                Toggle("Open at login", isOn: $openAtLogin)
+                if loginNeedsApproval {
+                    HStack {
+                        Text("macOS needs your approval in Login Items.")
+                            .font(.caption).foregroundStyle(.orange)
+                        Spacer()
+                        Button("Open Login Items") { LoginItem.openSystemSettings() }
+                    }
+                }
+                if let loginError {
+                    Text(loginError).font(.caption).foregroundStyle(.red)
+                }
             }
         }
         .formStyle(.grouped)
+        .onChange(of: showMenuBar) { _, visible in
+            // Never leave the app with neither a Dock nor a menu bar icon
+            if !visible && !showDockIcon { showDockIcon = true }
+        }
+        .onChange(of: showDockIcon) { _, visible in DockIcon.apply(visible) }
+        .onChange(of: openAtLogin) { _, enabled in
+            guard enabled != LoginItem.isEnabled else { return }
+            do {
+                try LoginItem.set(enabled)
+                loginError = nil
+            } catch {
+                loginError = "Could not change Open at login: \(error.localizedDescription)"
+                openAtLogin = LoginItem.isEnabled
+            }
+            loginNeedsApproval = LoginItem.needsApproval
+        }
         .frame(width: 520)
         .padding(.vertical, 8)
         .onAppear {
+            // Login Items can be changed in System Settings too
+            openAtLogin = LoginItem.isEnabled
+            loginNeedsApproval = LoginItem.needsApproval
             tokenDraft = store.token
             urlDraft = store.baseURL
         }

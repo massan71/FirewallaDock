@@ -8,6 +8,7 @@ private let log = Logger(subsystem: "local.firewalladock.app", category: "refres
 
 enum SettingsKey {
     static let showMenuBar = "showMenuBar"
+    static let showDockIcon = "showDockIcon"
 }
 
 @MainActor
