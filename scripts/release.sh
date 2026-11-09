@@ -8,6 +8,9 @@
 #               zip's SHA-256 are appended automatically
 #   --yes       publish without asking for confirmation
 #
+# If massan71/homebrew-tap is checked out next to this repository (or at
+# $HOMEBREW_TAP_DIR), its FirewallaDock cask is updated and pushed too.
+#
 # Steps: checks the repository, sets the version (build number + 1), builds a
 # clean universal Release, zips it without Finder/iCloud attributes, verifies the
 # unzipped app, then (after confirmation) commits, tags, pushes and creates the
@@ -41,6 +44,11 @@ git fetch -q origin
 [[ "$(git rev-parse HEAD)" == "$(git rev-parse origin/main)" ]] || die "main is not in sync with origin/main"
 git rev-parse -q --verify "refs/tags/$TAG" >/dev/null && die "tag $TAG already exists"
 git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1 && die "tag $TAG already exists on GitHub"
+TAP_DIR="${HOMEBREW_TAP_DIR:-$ROOT/../homebrew-tap}"
+CASK="$TAP_DIR/Casks/firewalladock.rb"
+if [[ -f "$CASK" && -n "$(git -C "$TAP_DIR" status --porcelain)" ]]; then
+  die "Homebrew tap $TAP_DIR has uncommitted changes"
+fi
 
 # --- Version -----------------------------------------------------------------
 OLD_BUILD="$(grep -m1 -Eo 'CURRENT_PROJECT_VERSION = [0-9]+;' "$PBX" | grep -Eo '[0-9]+')"
@@ -120,3 +128,25 @@ gh release create "$TAG" "$ZIP" --title "FirewallaDock $VERSION" --notes-file "$
 REMOTE_SHA="$(gh release view "$TAG" --json assets --jq '.assets[0].digest' | sed 's/^sha256://')"
 [[ "$REMOTE_SHA" == "$SHA" ]] || die "uploaded file checksum differs: $REMOTE_SHA"
 echo "Published $TAG: $(gh release view "$TAG" --json url --jq .url)"
+
+# --- Homebrew cask -----------------------------------------------------------
+# Updates massan71/homebrew-tap (checked out next to this repository, or at
+# $HOMEBREW_TAP_DIR) so `brew upgrade --cask firewalladock` gets the new version.
+if [[ -f "$CASK" ]]; then
+  if [[ -n "$(git -C "$TAP_DIR" status --porcelain)" ]]; then
+    echo "warning: $TAP_DIR has uncommitted changes; update Casks/firewalladock.rb by hand (version $VERSION, sha256 $SHA)" >&2
+    exit 0
+  fi
+  git -C "$TAP_DIR" pull -q --ff-only
+  sed -i '' -E "s/^  version \"[^\"]*\"/  version \"$VERSION\"/; s/^  sha256 \"[^\"]*\"/  sha256 \"$SHA\"/" "$CASK"
+  grep -q "version \"$VERSION\"" "$CASK" && grep -q "sha256 \"$SHA\"" "$CASK" \
+    || { echo "warning: could not update $CASK; update it by hand" >&2; git -C "$TAP_DIR" checkout -q -- Casks/firewalladock.rb; exit 0; }
+  ruby -c "$CASK" >/dev/null
+  CASK_MESSAGE="Update FirewallaDock to $VERSION"
+  [[ -n "${RELEASE_COMMIT_TRAILER:-}" ]] && CASK_MESSAGE="$CASK_MESSAGE"$'\n\n'"$RELEASE_COMMIT_TRAILER"
+  git -C "$TAP_DIR" commit -q -m "$CASK_MESSAGE" -- Casks/firewalladock.rb
+  git -C "$TAP_DIR" push -q
+  echo "Updated Homebrew cask: brew upgrade --cask firewalladock"
+else
+  echo "Homebrew tap not found at $TAP_DIR; cask not updated"
+fi

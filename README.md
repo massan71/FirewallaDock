@@ -28,6 +28,18 @@ A macOS Dock app that shows the status of your Firewalla network, reading data t
 
 > **Note:** flow data (the Flows section and the "Blocked flows per day" chart) is a paid feature. It is only available on some Firewalla MSP plans and must be enabled there; otherwise the API returns no flows.
 
+## Install
+
+With [Homebrew](https://brew.sh):
+
+```bash
+brew install --cask massan71/tap/firewalladock
+```
+
+Update with `brew upgrade --cask firewalladock`. Or download the zip from [Releases](https://github.com/massan71/FirewallaDock/releases/latest) and move `FirewallaDock.app` to `/Applications`.
+
+The app is ad-hoc signed and not notarized. The Homebrew cask removes the quarantine flag so it opens directly; with the zip, macOS blocks the first launch until you click **Open Anyway** in System Settings → Privacy & Security.
+
 ## Building
 
 ```bash
@@ -51,7 +63,7 @@ The app is ad-hoc signed ("Sign to Run Locally"); to distribute it, set your dev
 scripts/release.sh 1.3 notes.md
 ```
 
-Sets the version (and bumps the build number), builds a clean universal Release, zips and verifies it, then asks for confirmation before committing, tagging, pushing and creating the GitHub release. `notes.md` holds the "What's new" text; install steps and the zip's SHA-256 are added automatically. It stops before pushing anything if the working tree isn't clean, `main` isn't in sync with GitHub, the tag exists or a check fails.
+Sets the version (and bumps the build number), builds a clean universal Release, zips and verifies it, then asks for confirmation before committing, tagging, pushing and creating the GitHub release. If [massan71/homebrew-tap](https://github.com/massan71/homebrew-tap) is checked out next to this repository, its cask is updated and pushed too. `notes.md` holds the "What's new" text; install steps and the zip's SHA-256 are added automatically. It stops before pushing anything if the working tree isn't clean, `main` isn't in sync with GitHub, the tag exists or a check fails.
 
 ## Setup
 
