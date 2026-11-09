@@ -59,7 +59,7 @@ struct ContentView: View {
                         ProgressView().controlSize(.small)
                     }
                     Button {
-                        Task { await store.refresh() }
+                        store.manualRefresh(from: "toolbar")
                     } label: { Label("Refresh", systemImage: "arrow.clockwise") }
                     .disabled(store.isLoading)
                     SettingsLink { Label("Settings", systemImage: "gearshape") }

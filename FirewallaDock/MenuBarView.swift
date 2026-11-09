@@ -66,7 +66,7 @@ struct MenuBarView: View {
                 Text("Updated \(Fmt.relative(last))").font(.caption).foregroundStyle(.secondary)
             }
             Button {
-                Task { await store.refresh() }
+                store.manualRefresh(from: "menu bar")
             } label: {
                 Image(systemName: "arrow.clockwise")
             }

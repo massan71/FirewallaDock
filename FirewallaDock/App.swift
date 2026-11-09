@@ -18,7 +18,7 @@ struct FirewallaDockApp: App {
         }
         .commands {
             CommandGroup(after: .toolbar) {
-                Button("Refresh") { Task { await store.refresh() } }
+                Button("Refresh") { store.manualRefresh(from: "menu command") }
                     .keyboardShortcut("r")
             }
         }
@@ -97,6 +97,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func refreshNow() {
-        Task { @MainActor in await Store.shared.refresh() }
+        Task { @MainActor in Store.shared.manualRefresh(from: "Dock menu") }
     }
 }

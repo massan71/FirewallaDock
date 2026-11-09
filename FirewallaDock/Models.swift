@@ -201,7 +201,9 @@ enum AlarmType {
 }
 
 struct Flow: Decodable, Identifiable, Hashable {
-    let id = UUID()
+    /// Built from the flow's own fields so it stays the same across reloads
+    /// (a random UUID made the table lose its selection and scroll position).
+    var id: String = ""
     var ts: Double
     var gid: String?
     var proto: String?
@@ -241,6 +243,20 @@ struct Flow: Decodable, Identifiable, Hashable {
         device = c.object("device")
         source = c.object("source")
         destination = c.object("destination")
+        id = [String(ts), gid ?? "", device?.id ?? source?.ip ?? "", destination?.ip ?? destination?.name ?? "",
+              proto ?? "", direction ?? "", block ? "b" : "a"].joined(separator: "|")
+    }
+
+    /// Makes IDs unique when the API returns two flows with identical fields.
+    static func withUniqueIDs(_ flows: [Flow]) -> [Flow] {
+        var seen: [String: Int] = [:]
+        return flows.map { flow in
+            var flow = flow
+            let n = seen[flow.id, default: 0]
+            seen[flow.id] = n + 1
+            if n > 0 { flow.id += "#\(n)" }
+            return flow
+        }
     }
 }
 
@@ -281,17 +297,29 @@ enum Fmt {
         return Locale(components: comps)
     }()
 
-    static func bytes(_ v: Double) -> String {
-        ByteCountFormatter.string(fromByteCount: Int64(v), countStyle: .decimal)
-    }
-    static func relative(_ d: Date) -> String {
+    // Formatters are expensive to create, so they are built once and reused for every table cell.
+    // Only used from the main thread (SwiftUI views).
+    private static let byteFormatter: ByteCountFormatter = {
+        let f = ByteCountFormatter()
+        f.countStyle = .decimal
+        return f
+    }()
+    private static let relativeFormatter: RelativeDateTimeFormatter = {
         let f = RelativeDateTimeFormatter()
         f.unitsStyle = .short
         f.locale = locale
-        return f.localizedString(for: d, relativeTo: Date())
+        return f
+    }()
+    private static let dateTimeStyle = Date.FormatStyle(date: .abbreviated, time: .shortened).locale(locale)
+
+    static func bytes(_ v: Double) -> String {
+        byteFormatter.string(fromByteCount: Int64(v))
+    }
+    static func relative(_ d: Date) -> String {
+        relativeFormatter.localizedString(for: d, relativeTo: Date())
     }
     static func dateTime(_ d: Date) -> String {
-        d.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(locale))
+        d.formatted(dateTimeStyle)
     }
 }
 

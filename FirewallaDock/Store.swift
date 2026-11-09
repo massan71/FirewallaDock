@@ -1,6 +1,10 @@
 import AppKit
 import Foundation
+import Network
+import OSLog
 import UserNotifications
+
+private let log = Logger(subsystem: "local.firewalladock.app", category: "refresh")
 
 enum SettingsKey {
     static let showMenuBar = "showMenuBar"
@@ -43,6 +47,11 @@ final class Store: ObservableObject {
     @Published var archiveProgress: (done: Int, total: Int)?
 
     private var timerTask: Task<Void, Never>?
+    /// A refresh was asked for while another one was running; run again when it ends.
+    private var refreshRequested = false
+    private var pathMonitor: NWPathMonitor?
+    private var isOffline = false
+    private var wakeObserver: NSObjectProtocol?
     private var notifiedAlarmIDs: Set<String>?
 
     var isConfigured: Bool { !baseURL.trimmingCharacters(in: .whitespaces).isEmpty && !token.isEmpty }
@@ -76,30 +85,86 @@ final class Store: ObservableObject {
 
     func start() {
         if notifyNewAlarms { requestNotificationPermission() }
+        observeWakeAndNetwork()
         restartTimer()
     }
 
+    /// Refreshes now, then every `refreshMinutes`.
     private func restartTimer() {
         timerTask?.cancel()
         timerTask = Task { [weak self] in
             while !Task.isCancelled {
-                await self?.refresh()
+                // Run the refresh in its own task so restarting the timer never cancels
+                // requests that are in flight (that used to show a "cancelled" error).
+                await Task { @MainActor [weak self] in await self?.refresh() }.value
                 let minutes = max(1, self?.refreshMinutes ?? 5)
                 try? await Task.sleep(for: .seconds(minutes * 60))
             }
         }
     }
 
+    /// Refresh right after the Mac wakes up or the network comes back,
+    /// instead of waiting for the next timer tick.
+    private func observeWakeAndNetwork() {
+        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            log.notice("Mac woke from sleep: refreshing in 5 s")
+            Task { @MainActor [weak self] in
+                // Give Wi-Fi a moment to reconnect; the network monitor covers slower cases
+                try? await Task.sleep(for: .seconds(5))
+                self?.restartTimer()
+            }
+        }
+
+        let monitor = NWPathMonitor()
+        monitor.pathUpdateHandler = { [weak self] path in
+            let online = path.status == .satisfied
+            Task { @MainActor [weak self] in self?.networkChanged(online: online) }
+        }
+        monitor.start(queue: DispatchQueue(label: "FirewallaDock.network"))
+        pathMonitor = monitor
+    }
+
+    private func networkChanged(online: Bool) {
+        let cameBack = online && isOffline
+        isOffline = !online
+        if cameBack {
+            log.notice("Network is back: refreshing")
+            restartTimer()
+        }
+    }
+
+    /// A refresh the user asked for (menu command, toolbar, Dock menu, menu bar).
+    func manualRefresh(from source: String) {
+        log.notice("Manual refresh from \(source, privacy: .public)")
+        Task { await refresh() }
+    }
+
+    /// Refreshes all data. If a refresh is already running, another one runs right after it,
+    /// so a manual refresh (⌘R, Dock menu, menu bar) is never silently dropped.
     func refresh() async {
         guard isConfigured else {
             errorMessage = APIError.notConfigured.errorDescription
             updateDock()
             return
         }
-        guard !isLoading else { return }
+        if isLoading {
+            log.notice("Refresh requested while one is running: queued")
+            refreshRequested = true
+            return
+        }
         isLoading = true
         defer { isLoading = false }
+        repeat {
+            refreshRequested = false
+            log.notice("Refresh started")
+            await loadAll()
+            log.notice("Refresh finished")
+        } while refreshRequested
+    }
 
+    private func loadAll() async {
         let api = self.api
         async let b = api.boxes()
         async let d = api.devices()
@@ -139,7 +204,7 @@ final class Store: ObservableObject {
         isLoadingFlows = true
         defer { isLoadingFlows = false }
         do {
-            flows = try await api.flows(query: query.isEmpty ? nil : query, max: 500)
+            flows = Flow.withUniqueIDs(try await api.flows(query: query.isEmpty ? nil : query, max: 500))
             flowsError = nil
         } catch {
             flowsError = error.localizedDescription
