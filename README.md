@@ -13,12 +13,17 @@ A macOS Dock app that shows the status of your Firewalla network, reading data t
 - **Alarms**: search, filter by type, new/seen tracking, archive selected or all seen alarms; right-click to **mute** an alarm type, domain or IP (everywhere or for one device) or **block** the remote domain or IP with a new rule (requires a *Full Access* token)
 - **Devices**: sortable table with IP, MAC, vendor, network, traffic
 - **Rules**: every Firewalla rule with its target, scope and hit count, a switch to pause or resume it, and right-click to delete it (requires a *Full Access* token)
+- **Threat intelligence**: checks the remote IP and domain of alarms against [VirusTotal](https://www.virustotal.com), [AbuseIPDB](https://www.abuseipdb.com), [Shodan InternetDB](https://internetdb.shodan.io) and [abuse.ch](https://abuse.ch) (ThreatFox and URLhaus). New security alarms are checked automatically, with a notification for malicious ones; any alarm can be checked from its context menu or by double-clicking it. Results show per service with links, and a Block shortcut — nothing is ever blocked automatically
 - **Flows**: all or blocked only, with advanced [search queries](https://docs.firewalla.net/api-reference/search/) (requires a paid MSP plan, see below)
 - Automatic refresh (1–60 min, and right after the Mac wakes up or the network comes back) and notifications for new alarms
 - Optional open at login
 - API token stored in the Keychain and only ever sent over HTTPS; sandboxed app with outgoing network access only
 
 > The MSP API has no endpoint to switch box services (ad block, family protection, VPN server…) on or off, so the app controls rules instead.
+
+### Threat intelligence and privacy
+
+Each service is off until you enable it in **Settings → Threat Intelligence** (VirusTotal, AbuseIPDB and abuse.ch need a free API key, stored in the Keychain; Shodan InternetDB needs none). Only the alarm's remote IP or domain is sent — local, private and reserved addresses and `.local`/`.lan` names are filtered out, and nothing about your devices is ever sent. Note that VirusTotal adds looked-up IPs and domains to its dataset, and that the free VirusTotal, Shodan InternetDB and abuse.ch APIs are for non-commercial use only. The app spaces requests to stay within the free limits (VirusTotal: 4/min and 500/day; AbuseIPDB: 1,000/day) and keeps results for 24 hours.
 
 ## Requirements
 
@@ -95,6 +100,9 @@ The saved responses contain your device names and MAC addresses, so do not share
 | `FirewallaDock/AppPresence.swift` | Open at login and Dock icon visibility |
 | `FirewallaDock/RulesView.swift` | Rules list with pause/resume and delete |
 | `FirewallaDock/AlarmActions.swift` | Mute and block options offered for an alarm |
+| `FirewallaDock/ThreatIntel.swift` | Reputation service clients and the public-address filter |
+| `FirewallaDock/ThreatIntelStore.swift` | Lookup queue, rate limits, cache and automatic checks |
+| `FirewallaDock/ReputationViews.swift` | Reputation column, details sheet and settings |
 | `FirewallaDock/Keychain.swift` | Keychain storage for the token |
 
 ## License

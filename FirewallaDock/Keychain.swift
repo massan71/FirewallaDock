@@ -1,11 +1,13 @@
 import Foundation
 import Security
 
+/// Secrets stored in the login Keychain under the "FirewallaDock" service.
 enum Keychain {
     private static let service = "FirewallaDock"
-    private static let account = "msp-api-token"
+    /// The Firewalla MSP API token
+    static let mspToken = "msp-api-token"
 
-    static func load() -> String {
+    static func load(_ account: String = mspToken) -> String {
         let q: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -19,16 +21,16 @@ enum Keychain {
         return String(data: data, encoding: .utf8) ?? ""
     }
 
-    static func save(_ token: String) {
+    static func save(_ secret: String, account: String = mspToken) {
         let base: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
         ]
         SecItemDelete(base as CFDictionary)
-        guard !token.isEmpty else { return }
+        guard !secret.isEmpty else { return }
         var add = base
-        add[kSecValueData as String] = Data(token.utf8)
+        add[kSecValueData as String] = Data(secret.utf8)
         add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
         SecItemAdd(add as CFDictionary, nil)
     }

@@ -184,6 +184,8 @@ final class Store: ObservableObject {
             // Forget seen IDs of alarms that are no longer active
             let ids = Set(fetched.map(\.id))
             if !seenAlarmIDs.isSubset(of: ids) { seenAlarmIDs.formIntersection(ids) }
+            // Reputation lookups for security alarms that arrived since the last refresh
+            ThreatIntel.shared.didRefresh(activeAlarms: activeAlarms)
         } catch { errors.append("Alarms: \(error.localizedDescription)") }
         do {
             rules = try await r

@@ -235,6 +235,7 @@ struct AlarmsView: View {
     @State private var confirmArchive = false
     @State private var pendingAction: AlarmAction?
     @State private var confirmAction = false
+    @State private var reputationAlarm: Alarm?
 
     var filtered: [Alarm] {
         store.activeAlarms.filter { a in
@@ -247,6 +248,15 @@ struct AlarmsView: View {
     }
 
     private var selectedAlarms: [Alarm] { store.activeAlarms.filter { selection.contains($0.id) } }
+
+    private func showReputation(_ alarm: Alarm) {
+        let intel = ThreatIntel.shared
+        // Check right away if this alarm was never checked
+        if intel.isConfigured, intel.level(for: alarm) == nil, !intel.isChecking(alarm) {
+            intel.check(alarm, force: false)
+        }
+        reputationAlarm = alarm
+    }
 
     private func requestAction(_ action: AlarmAction) {
         pendingAction = action
@@ -287,6 +297,8 @@ struct AlarmsView: View {
                 TableColumn("Remote") { a in
                     Text([a.remote?.domain ?? a.remote?.ip, a.remote?.region].compactMap { $0 }.joined(separator: " · "))
                 }.width(min: 90, ideal: 160)
+                TableColumn("Reputation") { a in ReputationBadge(alarm: a) }
+                    .width(min: 90, ideal: 110)
             }
             .contextMenu(forSelectionType: Alarm.ID.self) { ids in
                 let alarms = store.activeAlarms.filter { ids.contains($0.id) }
@@ -317,6 +329,28 @@ struct AlarmsView: View {
                             }
                         }
                     }
+                    Divider()
+                    Button("Show Reputation…") { showReputation(alarm) }
+                        .disabled(Indicator.from(alarm).isEmpty)
+                }
+                let checkable = alarms.filter { !Indicator.from($0).isEmpty }
+                if !checkable.isEmpty {
+                    Button(checkable.count == 1 ? "Check Reputation" : "Check Reputation of \(checkable.count) Alarms") {
+                        checkable.forEach { ThreatIntel.shared.check($0) }
+                    }
+                    .disabled(!ThreatIntel.shared.isConfigured)
+                }
+            } primaryAction: { ids in
+                // Double-click: show the alarm's reputation
+                if ids.count == 1, let alarm = store.activeAlarms.first(where: { ids.contains($0.id) }),
+                   !Indicator.from(alarm).isEmpty {
+                    showReputation(alarm)
+                }
+            }
+            .sheet(item: $reputationAlarm) { alarm in
+                ReputationSheet(alarm: alarm) { action in
+                    // Let the sheet close before showing the confirmation dialog
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { requestAction(action) }
                 }
             }
             .onChange(of: selection) { _, ids in store.markSeen(ids) }
@@ -596,6 +630,8 @@ struct SettingsView: View {
                      : "The Dock icon can only be hidden while the menu bar icon is shown.")
                     .font(.caption).foregroundStyle(.secondary)
             }
+
+            ThreatIntelSettings()
 
             Section("Startup") {
                 Toggle("Open at login", isOn: $openAtLogin)
