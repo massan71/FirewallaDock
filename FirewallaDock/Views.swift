@@ -49,18 +49,22 @@ struct ContentView: View {
                 }
             }
             .navigationTitle(selection?.rawValue ?? "Firewalla")
+            // Last update as the window subtitle: small and aligned by macOS
+            // (as a toolbar item the text sat off-center next to the buttons)
+            .navigationSubtitle(store.lastUpdated.map { "Updated \($0.formatted(date: .omitted, time: .shortened))" } ?? "")
             .toolbar {
                 ToolbarItemGroup {
-                    if let last = store.lastUpdated {
-                        Text("Updated \(last.formatted(date: .omitted, time: .shortened))")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                    if store.isLoading {
-                        ProgressView().controlSize(.small)
-                    }
                     Button {
                         store.manualRefresh(from: "toolbar")
-                    } label: { Label("Refresh", systemImage: "arrow.clockwise") }
+                    } label: {
+                        // The spinner replaces the icon, so the toolbar doesn't shift while loading
+                        if store.isLoading {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Label("Refresh", systemImage: "arrow.clockwise")
+                        }
+                    }
+                    .help("Refresh (⌘R)")
                     .disabled(store.isLoading)
                     SettingsLink { Label("Settings", systemImage: "gearshape") }
                 }
@@ -208,17 +212,44 @@ struct TrendChart: View {
 
 struct AlarmTypeChart: View {
     let alarms: [Alarm]
+
     var body: some View {
         let grouped = Dictionary(grouping: alarms, by: \.type)
-            .map { (name: AlarmType.name($0.key), count: $0.value.count) }
-            .sorted { $0.count > $1.count }
-        Chart(grouped, id: \.name) { item in
-            BarMark(x: .value("Count", item.count), y: .value("Type", item.name))
-                .foregroundStyle(Color.orange.gradient)
-                .annotation(position: .trailing) { Text("\(item.count)").font(.caption) }
+            .map { (type: $0.key, name: AlarmType.name($0.key), count: $0.value.count) }
+            .sorted { $0.count != $1.count ? $0.count > $1.count : $0.name < $1.name }
+        let maxCount = max(1, grouped.map(\.count).max() ?? 1)
+
+        // One row per type: name, bar, count. A plain grid keeps every name on the same
+        // line as its bar (Swift Charts drew the names inside the plot, between two bars).
+        Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 8) {
+            ForEach(grouped, id: \.type) { item in
+                GridRow(alignment: .center) {
+                    HStack(spacing: 8) {
+                        // Fixed icon width so every name starts at the same x
+                        Image(systemName: AlarmType.icon(item.type))
+                            .frame(width: 20)
+                        Text(item.name).lineLimit(1)
+                    }
+                    .font(.callout)
+                    .foregroundStyle(AlarmType.isSecurity(item.type) ? Color.red : Color.primary)
+                    .gridColumnAlignment(.leading)
+                    GeometryReader { geo in
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill((AlarmType.isSecurity(item.type) ? Color.red : Color.orange).gradient)
+                            .frame(width: max(4, geo.size.width * CGFloat(item.count) / CGFloat(maxCount)))
+                            .frame(maxHeight: .infinity)
+                    }
+                    .frame(height: 16)
+                    Text("\(item.count)")
+                        .font(.callout)
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                        .gridColumnAlignment(.trailing)
+                }
+            }
         }
-        .frame(height: CGFloat(max(1, grouped.count)) * 28 + 20)
         .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 12).fill(.background.secondary))
     }
 }
